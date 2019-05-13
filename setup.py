@@ -1,14 +1,10 @@
 #! /usr/bin/env python
-import setuptools
-
-import os
-
 from setuptools import find_packages, setup
 
-setup(name='picli-gman-faas',
+setup(name='picli-gman',
       use_scm_version=True,
-      setup_requires=['setuptools-scm'],
-      description='A sinister inter-dimensional bureaucrat that monitors the state of each FaaS.',
+      description='A sinister inter-dimensional bureaucrat that monitors'
+                  ' the state of each FaaS.',
       classifiers=['Development Status :: 2 - Pre-Alpha',
                    'Environment :: Console',
                    'Operating System :: OS Independent',
@@ -22,5 +18,8 @@ setup(name='picli-gman-faas',
       requires=['flask-restful',
                 'attrdict',
                 'pyyaml',
-                'peewee']
-)
+                'peewee',
+                'marshmallow',
+                'Marshmallow-Peewee'],
+      setup_requires=['setuptools-scm'],
+      tests_require=['pytest-flask', 'pytest-xdist'])

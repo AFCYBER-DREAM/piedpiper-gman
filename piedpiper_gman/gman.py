@@ -1,38 +1,115 @@
 import datetime
+import uuid
 
 from flask import request
 from flask_restful import Resource
-from piedpiper_gman.orm.models import (Task, TaskEvent, TaskEventSchema)
+from peewee import DoesNotExist
+from piedpiper_gman.orm.models import (Task,
+                                       TaskEvent,
+                                       TaskSchema,
+                                       TaskEventSchema)
 
 
 class GMan(Resource):
 
-    def get(self, task_id=None):
+    def get(self, task_id, events=None):
+        try:
+            task = Task.get(Task.task_id == task_id)
+        except DoesNotExist:
+            return {'message': 'Not Found'}, 404
 
-        if task_id:
-            TaskEvent.get(Task.task_id == task_id)
-            return ({'hello': 'world'}, 200)
-        return {}, 200
+        if events:
+            try:
+                events = TaskEvent.select() \
+                            .join(Task) \
+                            .where(Task.task_id == task_id) \
+                            .order_by(TaskEvent.timestamp)
 
-    def post(self):
-        data = request.get_json(force=True)
+                return TaskEventSchema(many=True, exclude=['id']).dump(events)
+            except DoesNotExist:
+                return {'message': 'Not Found'}, 404
+        else:
+            return TaskSchema().dump(task)
+
+    def put(self, task_id, events=None):
+
+        if events:
+            return {'message': 'Not Found'}, 404
+
+        raw = request.get_json(force=True)
+
+        now = datetime.datetime.now()
+        event_marsh = TaskEventSchema().load(raw, partial=('timestamp',))
+
+        try:
+            task = Task.get(Task.task_id == task_id)
+        except DoesNotExist:
+            return {'message': 'Not Found'}, 404
+
+        if event_marsh.errors:
+            return {'errors': event_marsh.errors}, 422
+
+        event_data = event_marsh.data
+
+        if event_data.status == 'started':
+            return {'errors': {'status':
+                               ['updates may not be value \'started\'']}}, 422
+
+        if not event_data.thread_id and event_data.status == 'recieved':
+            event_data.thread_id = uuid.uuid4()
+
+        event = TaskEvent.create(task=task,
+                                 message=event_data.message,
+                                 status=event_data.status,
+                                 timestamp=now,
+                                 thread_id=event_data.thread_id)
+
+        return TaskEventSchema(exclude=['id']).dump(event)
+
+    def post(self, *args, **kwargs):
+        if len(args) or len(kwargs):
+            return {'message': 'Not Found'}, 404
+
+        raw = request.get_json(force=True)
+        errors = {'errors': {}}
+
+        for disallowed in ('task_id', 'timestamp', 'thread_id'):
+            if disallowed in raw:
+                errors.setdefault(disallowed, []).append(
+                    'may not be specified on a post/create')
+
+        if len(errors['errors']):
+            return errors, 422
 
         # strftime('%Y-%m-%d %H:%M')
+        # raw['timestamp'] == iso8601 "2019-05-10T13:59:37.815929+00:00"
         now = datetime.datetime.now()
-        import pdb; pdb.set_trace()
-        y = TaskEventSchema().load(data)
+        task_marsh = TaskSchema().load(raw)
+        event_marsh = TaskEventSchema().load(raw, partial=('timestamp',))
 
-        task = Task.create(run_id=data['run_id'],
-                           caller=data['caller'],
-                           project=data['project'])
+        if task_marsh.errors:
+            return {'errors': task_marsh.errors}, 422
+        else:
+            task_data = task_marsh.data
 
-        task_event = TaskEvent.create(task=task,
-                                      message=data['message'],
-                                      status=data['status'],
-                                      timestamp=now)
+        if event_marsh.errors:
+            return {'errors': event_marsh.errors}, 422
+        else:
+            event_data = event_marsh.data
 
-        x = TaskEventSchema().dump(task_event)
-        return x
+        if event_data.status != 'started':
+            return {'errors': {'status':
+                               ['creation must be value \'started\'']}}, 422
 
-    def put(self, task_id):
-        return None
+        task = Task.create(task_id=task_data.task_id,
+                           run_id=task_data.run_id,
+                           caller=task_data.caller,
+                           project=task_data.project)
+
+        event = TaskEvent.create(task=task,
+                                 message=event_data.message,
+                                 status=event_data.status,
+                                 timestamp=now,
+                                 thread_id='')
+
+        return TaskEventSchema(exclude=['id']).dump(event)

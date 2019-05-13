@@ -1,22 +1,25 @@
-import os
 import uuid
 
 from marshmallow_peewee import ModelSchema, Related
-from piedpiper_gman.config import Config
-from peewee import *
 
-# gman schema: task_id(guid), timestamp(datetime), status[started, completed, failed, info], caller, message(text), run_id(guid)
+from peewee import (DatabaseProxy,
+                    DateTimeField,
+                    ForeignKeyField,
+                    Model,
+                    SqliteDatabase,
+                    TextField)
 
-if Config.database.type == 'sqlite':
-    db = SqliteDatabase(Config.database.uri, pragmas={'foreign_keys': 1})
-else:
-    raise Exception(f'Database type {config.database.type} not yet supported')
+# gman schema: task_id(guid), timestamp(datetime),
+#   status[started, completed, failed, info], caller,
+#   message(text), run_id(guid)
+
+db = DatabaseProxy()
 
 
 class Task(Model):
     task_id = TextField(primary_key=True, default=uuid.uuid4)
     run_id = TextField(null=False)
-    project = TextField(null=True)
+    project = TextField(null=False)
     caller = TextField(null=False)
 
     class Meta:
@@ -29,8 +32,11 @@ class TaskEvent(Model):
     status = TextField(null=False, choices=(('started', 'started'),
                                             ('completed', 'completed'),
                                             ('failed', 'failed'),
+                                            ('delegate', 'delegate'),
+                                            ('recieved'), ('recieved'),
                                             ('info', 'info')))
     message = TextField(null=False)
+    thread_id = TextField(null=True)
 
     class Meta:
         database = db
@@ -50,6 +56,17 @@ class TaskEventSchema(ModelSchema):
         model = TaskEvent
 
 
-def db_init():
+def db_init(db_config):
+
+    if db_config.type == 'sqlite':
+        db_run = SqliteDatabase(db_config.uri,
+                                pragmas={'foreign_keys': 1})
+    else:
+        raise Exception(f'Database type {db_config.type}'
+                        ' not yet supported')
+
+    # Configure our proxy to use the db we specified in config.
+    db.initialize(db_run)
+
     db.connect()
     db.create_tables([Task, TaskEvent], safe=True)
