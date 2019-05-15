@@ -55,7 +55,7 @@ class GMan(Resource):
             return {'errors': {'status':
                                ['updates may not be value \'started\'']}}, 422
 
-        if not event_data.thread_id and event_data.status == 'recieved':
+        if not event_data.thread_id and event_data.status == 'received':
             event_data.thread_id = uuid.uuid4()
 
         event = TaskEvent.create(task=task,
@@ -75,14 +75,12 @@ class GMan(Resource):
 
         for disallowed in ('task_id', 'timestamp', 'thread_id'):
             if disallowed in raw:
-                errors.setdefault(disallowed, []).append(
+                errors['errors'].setdefault(disallowed, []).append(
                     'may not be specified on a post/create')
 
         if len(errors['errors']):
             return errors, 422
 
-        # strftime('%Y-%m-%d %H:%M')
-        # raw['timestamp'] == iso8601 "2019-05-10T13:59:37.815929+00:00"
         now = datetime.datetime.now()
         task_marsh = TaskSchema().load(raw)
         event_marsh = TaskEventSchema().load(raw, partial=('timestamp',))

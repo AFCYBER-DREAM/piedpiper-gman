@@ -9,10 +9,6 @@ from peewee import (DatabaseProxy,
                     SqliteDatabase,
                     TextField)
 
-# gman schema: task_id(guid), timestamp(datetime),
-#   status[started, completed, failed, info], caller,
-#   message(text), run_id(guid)
-
 db = DatabaseProxy()
 
 
@@ -32,8 +28,8 @@ class TaskEvent(Model):
     status = TextField(null=False, choices=(('started', 'started'),
                                             ('completed', 'completed'),
                                             ('failed', 'failed'),
-                                            ('delegate', 'delegate'),
-                                            ('recieved'), ('recieved'),
+                                            ('delegated', 'delegated'),
+                                            ('received', 'received'),
                                             ('info', 'info')))
     message = TextField(null=False)
     thread_id = TextField(null=True)
