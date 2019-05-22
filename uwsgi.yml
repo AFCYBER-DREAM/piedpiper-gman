@@ -1,0 +1,20 @@
+uwsgi:
+  env: APP_CONFIG={"database": {"type": "sqlite", "uri": "gman.db"}}
+  ## process control ##
+  harakiri: 30
+  processes: 4
+  master: true
+  vacuum: true
+  http: 0.0.0.0:8080
+  module: piedpiper_gman.app:run_uwsgi
+
+  ## security ##
+  # chroot: /tmp/uwsgi
+  # gid: uwsgi
+  # uid: uwsgi
+
+  ## stats ##
+  # stats: /tmp/statsock
+
+  ## debug stuff ##
+  # honour-stdin: true

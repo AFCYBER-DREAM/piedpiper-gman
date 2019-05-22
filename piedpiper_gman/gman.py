@@ -13,21 +13,24 @@ from piedpiper_gman.orm.models import (Task,
 class GMan(Resource):
 
     def get(self, task_id, events=None):
+
         try:
             task = Task.get(Task.task_id == task_id)
         except DoesNotExist:
             return {'message': 'Not Found'}, 404
 
         if events:
-            try:
-                events = TaskEvent.select() \
-                            .join(Task) \
-                            .where(Task.task_id == task_id) \
-                            .order_by(TaskEvent.timestamp)
+            events = [x for x in
+                      TaskEvent.select()
+                               .join(Task)
+                               .where(Task.task_id == task_id)
+                               .order_by(TaskEvent.timestamp)]
 
+            if len(events):
                 return TaskEventSchema(many=True, exclude=['id']).dump(events)
-            except DoesNotExist:
+            else:
                 return {'message': 'Not Found'}, 404
+
         else:
             return TaskSchema().dump(task)
 
@@ -68,7 +71,7 @@ class GMan(Resource):
 
     def post(self, *args, **kwargs):
         if len(args) or len(kwargs):
-            return {'message': 'Not Found'}, 404
+            return {'message': 'Unprocessable request'}, 422
 
         raw = request.get_json(force=True)
         errors = {'errors': {}}

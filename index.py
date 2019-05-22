@@ -2,8 +2,8 @@
 
 from os import path
 
-from piedpiper_gman.app import run
+from piedpiper_gman.app import run_dev
 
 
 if __name__ == '__main__':
-    run(config_path=path.realpath('./config.yml'))
+    run_dev(config_path=path.realpath('./config.yml'))

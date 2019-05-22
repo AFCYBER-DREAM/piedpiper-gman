@@ -1,7 +1,9 @@
 #! /usr/bin/env python
 from setuptools import find_packages, setup
 
-setup(name='picli-gman',
+tests_require = ['pytest-flask', 'pytest-cov']
+
+setup(name='piedpiper-gman',
       use_scm_version=True,
       description='A sinister inter-dimensional bureaucrat that monitors'
                   ' the state of each FaaS.',
@@ -23,4 +25,6 @@ setup(name='picli-gman',
         'marshmallow',
         'Marshmallow-Peewee'],
       setup_requires=['setuptools-scm'],
-      tests_require=['coverage', 'pytest-flask', 'pytest-xdist'])
+      extras_require={'test': tests_require,
+                      'uwsgi': ['uwsgi', 'uwsgitop']},
+      tests_require=tests_require)

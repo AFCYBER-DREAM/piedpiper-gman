@@ -1,4 +1,4 @@
-from pytest import raises, fail
+from pytest import raises
 
 from piedpiper_gman.config import load_config
 

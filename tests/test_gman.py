@@ -4,7 +4,7 @@ import pytest
 
 from piedpiper_gman.gman import GMan
 
-# from piedpiper_gman.orm.models import (Task, TaskEvent,
+from piedpiper_gman.orm.models import (Task, TaskEvent)
 #                                        TaskSchema, TaskEventSchema)
 
 # API entrypoint tests ####
@@ -91,12 +91,18 @@ gman_task_create_post = [
       'timestamp': '2019-dfdfd05-15T15:52:05.719859+00:00',
       'message': 'test defining invalid timestamp'},
      422,
+     [(lambda x: 'errors' in x, 'No error message returned')]),
+    ({'project': 'pytest suite',
+      'caller': 'test_case_10',
+      'status': 'started',
+      'message': 'testing missing run_id'},
+     422,
      [(lambda x: 'errors' in x, 'No error message returned')])
     ]
 
 
-@pytest.mark.parametrize("data,resp_code,tests", gman_task_create_post)
-def test_gman_post(data, resp_code, tests, api, client):
+@pytest.mark.parametrize('data,resp_code,tests', gman_task_create_post)
+def test_post(data, resp_code, tests, api, client):
     resp = client.post(api.url_for(GMan), json=data)
 
     assert resp.status_code == resp_code, f'Invalid response code {resp_code}'
@@ -104,6 +110,18 @@ def test_gman_post(data, resp_code, tests, api, client):
     if tests:
         for test in tests:
             assert test[0](resp.json), test[1]
+
+
+def test_post_w_task_id(api, client):
+    data = {'run_id': '1_post_task',
+            'project': '9435b705-fbca-49a9-a4ab-400cc932bdd1',
+            'caller': 'test_post_w_task_id',
+            'status': 'started',
+            'message': 'Test project is a UUID'}
+    resp = client.post(api.url_for(GMan, task_id='9435b705-fbca-49a9-a4ab-400cc932bdd1'),
+                       json=data)
+
+    assert resp.status_code == 422, f'Invalid response code {resp.status_code}'
 
 
 gman_put_statuses = [
@@ -121,8 +139,8 @@ def test_task(api, client):
     return client.post(api.url_for(GMan), json=gman_task_create)
 
 
-@pytest.mark.parametrize("status,resp_code", gman_put_statuses)
-def test_gman_put_statuses(status, resp_code, api, client, test_task):
+@pytest.mark.parametrize('status,resp_code', gman_put_statuses)
+def test_put_statuses(status, resp_code, api, client, test_task):
     task_id = test_task.json['task']['task_id']
     event = {
         'status': status,
@@ -134,5 +152,94 @@ def test_gman_put_statuses(status, resp_code, api, client, test_task):
     resp = client.put(api.url_for(GMan, task_id=task_id), json=event)
     assert resp.status_code == resp_code, f'Invalid response code {resp_code}'
 
+
+def test_put_bad_body(api, client, test_task):
+    task_id = test_task.json['task']['task_id']
+    event = {
+        'status': 'asdfasdfsd',
+        'message': f'Testing with status info bad body',
+        'caller': f'test put info bad body',
+        'thread_id': 'some_id'
+    }
+
+    resp = client.put(api.url_for(GMan, task_id=task_id), json=event)
+    assert resp.status_code == 422, f'Invalid response code {resp.status_code}'
+
+
+def test_put_recieved_no_thread_id(api, client, test_task):
+    task_id = test_task.json['task']['task_id']
+    event = {
+        'status': 'received',
+        'message': f'Testing with status info bad body',
+        'caller': f'test put info bad body',
+    }
+
+    resp = client.put(api.url_for(GMan, task_id=task_id), json=event)
+    assert resp.status_code == 200, f'Invalid response code {resp.status_code}'
+
+
+def test_put_bad_task_id(api, client):
+
+    task_id = uuid.uuid4()
+    event = {
+        'status': 'info',
+        'message': f'Testing with status info with /events',
+        'caller': f'test put info with /events',
+        'thread_id': 'some_id'
+    }
+
+    resp = client.put(api.url_for(GMan, task_id=task_id),
+                      json=event)
+    assert resp.status_code == 404, f'Expected 404 but got {resp.status_code}'
+
+
+def test_put_w_events(api, client, test_task):
+
+    task_id = test_task.json['task']['task_id']
+    event = {
+        'status': 'info',
+        'message': f'Testing with status info with /events',
+        'caller': f'test put info with /events',
+        'thread_id': 'some_id'
+    }
+
+    resp = client.put(api.url_for(GMan, task_id=task_id, events='events'),
+                      json=event)
+    assert resp.status_code == 404, f'Expected 404 but got {resp.status_code}'
+
+
+def test_get_bad_id(api, client):
+    resp = client.get(api.url_for(GMan, task_id=uuid.uuid4()))
+
+    assert resp.status_code == 404
+
+
+def test_get_task(api, client, test_task):
+    task_id = test_task.json['task']['task_id']
+
+    resp = client.get(api.url_for(GMan, task_id=task_id))
+
+    assert resp.status_code == 200
+    assert resp.json['task_id'] == task_id, 'Bad task_id returned'
+
+
+def test_get_task_events_no_events(api, client, test_task):
+    task_id = test_task.json['task']['task_id']
+
+    task = Task.get(Task.task_id == task_id)
+
+    TaskEvent.delete() \
+             .where(TaskEvent.task == task) \
+             .execute()
+
+    events = TaskEvent.select() \
+                      .join(Task) \
+                      .where(Task.task_id == task_id)
+
+    assert len([x for x in events]) == 0, 'events where not cleared out'
+
+    resp = client.get(api.url_for(GMan, task_id=task_id, events='events'))
+
+    assert resp.status_code == 404
 
 # Functional tests ###
