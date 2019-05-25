@@ -8,9 +8,12 @@ from flask_restful import Api
 from piedpiper_gman.config import load_config
 from piedpiper_gman.gman import GMan
 from piedpiper_gman.orm.models import db_init
+from piedpiper_gman.util import GManJSONEncoder
 
 
 app = Flask('gman')
+app.config['RESTFUL_JSON'] = {'cls': GManJSONEncoder}
+
 api = Api(app)
 
 
