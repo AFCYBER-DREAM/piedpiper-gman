@@ -223,6 +223,28 @@ def test_get_task(api, client, test_task):
     assert resp.json['task_id'] == task_id, 'Bad task_id returned'
 
 
+def test_get_task_events(api, client, test_task):
+    task_id = test_task.json['task']['task_id']
+
+    status = 'info'
+    event = {
+        'status': status,
+        'message': f'Testing with status {status}',
+        'caller': f'test put {status}',
+        'thread_id': 'some_id'
+    }
+
+    client.put(api.url_for(GMan, task_id=task_id), json=event)
+
+    resp = client.get(api.url_for(GMan, task_id=task_id, events='events'))
+
+    assert resp.status_code == 200
+    assert len(resp.json) == 2, 'Event count is off!'
+
+    for event in resp.json:
+        event['task']['task_id'] == task_id, 'Bad task_id returned'
+
+
 def test_get_task_events_no_events(api, client, test_task):
     task_id = test_task.json['task']['task_id']
 

@@ -27,7 +27,7 @@ class GMan(Resource):
                                .order_by(TaskEvent.timestamp)]
 
             if len(events):
-                return TaskEventSchema(many=True, exclude=['id']).dump(events)
+                return TaskEventSchema(many=True, exclude=['id']).dump(events).data
             else:
                 return {'message': 'Not Found'}, 404
 
@@ -62,6 +62,7 @@ class GMan(Resource):
             event_data.thread_id = uuid.uuid4()
 
         event = TaskEvent.create(task=task,
+                                 caller=event_data.caller,
                                  message=event_data.message,
                                  status=event_data.status,
                                  timestamp=now,
@@ -104,10 +105,10 @@ class GMan(Resource):
 
         task = Task.create(task_id=task_data.task_id,
                            run_id=task_data.run_id,
-                           caller=task_data.caller,
                            project=task_data.project)
 
         event = TaskEvent.create(task=task,
+                                 caller=event_data.caller,
                                  message=event_data.message,
                                  status=event_data.status,
                                  timestamp=now,
