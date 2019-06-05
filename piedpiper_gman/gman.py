@@ -155,12 +155,19 @@ class GMan(Resource):
                          .where(Task.thread_id == thread_id)
                          .order_by(TaskEvent.timestamp)]
 
+<<<<<<< HEAD
     def get_task_events(self, task_id):
         return [x for x in
                 TaskEvent.select()
                          .join(Task)
                          .where(Task.task_id == task_id)
                          .order_by(TaskEvent.timestamp)]
+=======
+        for disallowed in ('task_id', 'timestamp'):
+            if disallowed in raw:
+                errors['errors'].setdefault(disallowed, []).append(
+                    'may not be specified on a post/create')
+>>>>>>> allowing thread_id during creation
 
     def head(self, thread_id=None, events=None, task_id=None):
 
