@@ -3,19 +3,20 @@ import os
 
 from attrdict import AttrDict
 from flask import Flask
-from flask_restful import Api
 
 from piedpiper_gman.config import load_config
 from piedpiper_gman.gman import GMan
 from piedpiper_gman.orm.models import db_init
-from piedpiper_gman.util import GManJSONEncoder
+from piedpiper_gman.util import GManJSONEncoder, SRIConverter, Api
 
 
 app = Flask('gman')
 app.config['RESTFUL_JSON'] = {'cls': GManJSONEncoder}
 
-api = Api(app)
+app.url_map.converters['hash'] = SRIConverter
 
+
+api = Api(app, catch_all_404s=True)
 
 api.add_resource(GMan,
                  '/gman',
