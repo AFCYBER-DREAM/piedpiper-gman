@@ -1,7 +1,6 @@
 import uuid
 
 import flask
-
 import flask_restful
 
 import subresource_integrity as integrity
@@ -19,22 +18,31 @@ class VarProxy(object):
 class Api(flask_restful.Api):
 
     def handle_error(self, e):
-        if e.code == 404:
-            try:
-                error = VarProxy.path_errors[0]
-                VarProxy.path_errors = []
-                return self.make_response({'errors': [f'404 Not Found: {str(error)}']},
-                                          e.code)
-            except IndexError:
-                return self.make_response({'errors': [str(e)]}, e.code)
-        elif e.code == 500:
-            return self.make_response({'errors': 'Internal Server Error'}, e.code)
+        try:
+            if isinstance(e, TypeError):
+                return self.make_response({'message': f'{str(e)}'},
+                                          400)
+            if e.code == 404:
+                try:
+                    error = VarProxy.path_errors[0]
+                    VarProxy.path_errors = []
+                    return self.make_response({'message': f'404 Not Found: {str(error)}'},
+                                              e.code)
+                except IndexError:
+                    return self.make_response({'message': str(e)}, e.code)
+            elif e.code == 500:
+                return self.make_response({'message': 'Internal Server Error'}, e.code)
+            else:
+                return self.make_response({'message': str(e)}, e.code)
+        except AttributeError:
+            return self.make_response({'message': f'Internal Server Error{str(e)}'},
+                                      500)
 
 
 class GManJSONEncoder(flask.json.JSONEncoder):
 
     def default(self, obj):
-
+        """Add support for supported types"""
         if isinstance(obj, uuid.UUID):
             return str(obj)
         elif isinstance(obj, integrity.Hash):
@@ -55,9 +63,11 @@ class SRIConverter(BaseConverter):
             raise err
 
     def to_url(self, value):
+        if isinstance(value, str):
+            return sri.hash_to_urlsafeb64(sri.sri_to_hash(value))
         if isinstance(value, integrity.Hash):
-            return str(value)
+            return sri.hash_to_urlsafeb64(value)
         else:
-            err = ValidationError(f'Must be of type {type(integrity.Hash)}')
-            VarProxy.append(err)
+            err = ValidationError(f'Must be of type {str(integrity.Hash)}')
+            VarProxy.path_errors.append(err)
             raise err

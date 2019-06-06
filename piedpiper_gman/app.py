@@ -4,6 +4,7 @@ import os
 from attrdict import AttrDict
 from flask import Flask
 
+from piedpiper_gman.artman import ArtMan
 from piedpiper_gman.config import load_config
 from piedpiper_gman.gman import GMan
 from piedpiper_gman.orm.models import db_init
@@ -11,7 +12,8 @@ from piedpiper_gman.util import GManJSONEncoder, SRIConverter, Api
 
 
 app = Flask('gman')
-app.config['RESTFUL_JSON'] = {'cls': GManJSONEncoder}
+
+app.config.setdefault('RESTFUL_JSON', {})['cls'] = app.json_encoder = GManJSONEncoder
 
 app.url_map.converters['hash'] = SRIConverter
 
@@ -24,6 +26,12 @@ api.add_resource(GMan,
                  '/thread/<uuid:thread_id>',
                  '/thread/<uuid:thread_id>/<events>'
                  )
+
+api.add_resource(ArtMan,
+                 '/artifact',
+                 '/artifact/<uuid:artifact>',
+                 '/artifact/task/<uuid:task_id>',
+                 '/artifact/sri/<hash:sri>')
 
 
 def app_setup(config_path=None, config=None):

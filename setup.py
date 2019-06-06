@@ -22,7 +22,7 @@ setup(name='piedpiper-gman',
         'attrdict',
         'pyyaml',
         'peewee',
-        'marshmallow',
+        'marshmallow==2.19.2',
         'Marshmallow-Peewee',
         'subresource-integrity',
         'piedpiper @ git+https://github.com/AFCYBER-DREAM/python-piedpiper.git'

@@ -1,49 +1,26 @@
 import datetime
 import re
 
-from attrdict import AttrDict
-
 from flask import request
-from flask_restful import Resource
 from peewee import DoesNotExist
+
 from piedpiper_gman.orm.models import (Task,
                                        TaskEvent,
                                        TaskSchema,
-                                       TaskEventSchema)
+                                       TaskEventSchema,
+                                       QueryFailed,
+                                       ZeroResults)
+
+from piedpiper_gman.marshaller import Marshaller, MarshalError
+from piedpiper_gman.resource import PiedPiperResource
+
+from werkzeug.exceptions import BadRequest
 
 
-class Errors(object):
-
-    def __init__(self):
-        self.errors = {}
-
-    def add(self, key, error):
-        self.errors.setdefault(key, []).append(error)
-
-    def extend(self, errors):
-        assert isinstance(errors, dict)
-        for key, errs in errors.items():
-            if key in self.errors:
-                self.errors[key].extend(errs)
-            else:
-                self.errors[key] = errs
-
-    def emit(self):
-        return {'errors': self.errors}
-
-
-class MarshalError(Exception):
-
-    def __init__(self, errors):
-        self.errors = errors
-
-
-class GManMarshaller(object):
+class GManMarshaller(Marshaller):
 
     def __init__(self, raw):
-        assert isinstance(raw, dict)
-        self.errors = Errors()
-        self.raw_data = AttrDict(raw)
+        super(GManMarshaller, self).__init__(raw)
 
         self._task = None
         self._event = None
@@ -114,185 +91,128 @@ class GManMarshaller(object):
         return self._event
 
 
-class GMan(Resource):
-
-    @property
-    def NotFound(self):
-        return {'message': 'Not Found'}, 404
-
-    def get_task_states(self, events):
-        '''Parses task events to identify which state the task is in.'''
-
-        running = ('started', 'received')
-        completed = ('completed',)
-        failed = ('failed',)
-
-        states = {'running': [],
-                  'completed': [],
-                  'failed': []}
-
-        for event in events:
-            if event.status in running:
-                if event.task not in states['running']:
-                    states['running'].append(event.task)
-            elif event.status in completed:
-                if event.task not in states['completed']:
-                    states['completed'].append(event.task)
-                if event.task in states['running']:
-                    states['running'].remove(event.task)
-            elif event.status in failed:
-                if event.task not in states['failed']:
-                    states['failed'].append(event.task)
-                if event.task in states['running']:
-                    states['running'].remove(event.task)
-
-        return states
-
-    def get_event_thread(self, thread_id):
-        return [x for x in
-                TaskEvent.select()
-                         .join(Task)
-                         .where(Task.thread_id == thread_id)
-                         .order_by(TaskEvent.timestamp)]
-
-<<<<<<< HEAD
-    def get_task_events(self, task_id):
-        return [x for x in
-                TaskEvent.select()
-                         .join(Task)
-                         .where(Task.task_id == task_id)
-                         .order_by(TaskEvent.timestamp)]
-=======
-        for disallowed in ('task_id', 'timestamp'):
-            if disallowed in raw:
-                errors['errors'].setdefault(disallowed, []).append(
-                    'may not be specified on a post/create')
->>>>>>> allowing thread_id during creation
+class GMan(PiedPiperResource):
 
     def head(self, thread_id=None, events=None, task_id=None):
 
-        if not (thread_id or task_id):
-            return None, 404
+        try:
+            if thread_id:
+                task_events = self.get_event_thread(thread_id)
 
-        if thread_id:
-            task_events = self.get_event_thread(thread_id)
-        else:
-            task_events = self.get_task_events(task_id)
+                states = self.get_task_states(task_events)
+                headers = {'x-gman-tasks-running': len(states['running']),
+                           'x-gman-tasks-completed': len(states['completed']),
+                           'x-gman-tasks-failed': len(states['failed'])}
+                return None, 200, headers
+            elif task_id:
+                task_events = self.get_task_events(task_id)
 
-        if len(task_events):
-
-            if task_id:
                 if events:
                     return None, 200, {'x-gman-events': len(task_events)}
                 else:
-                    # 1 task, should have a single state so find it
                     state = [k for k, v in self.get_task_states(task_events).items()
                              if len(v)][0]
                     return None, 200, {'x-gman-task-state': state}
-
-            states = self.get_task_states(task_events)
-            headers = {'x-gman-tasks-running': len(states['running']),
-                       'x-gman-tasks-completed': len(states['completed']),
-                       'x-gman-tasks-failed': len(states['failed'])}
-            return None, 200, headers
-        else:
-
+            else:
+                raise BadRequest('No action specified')
+        except ZeroResults:
             if task_id:
                 if events:
                     return None, 404, {'x-gman-events': 0}
                 else:
                     return None, 404, {'x-gman-task-state': 'not found'}
-
-            headers = {'x-gman-tasks-running': 0,
-                       'x-gman-tasks-completed': 0,
-                       'x-gman-tasks-failed': 0}
-            return None, 404, headers
-
-    def get(self,  task_id=None, events=None, thread_id=None):
-
-        if thread_id:
-            event_thread = self.get_event_thread(thread_id)
-            if not len(event_thread):
-                return self.NotFound
-
-            if events:
-                return TaskEventSchema(many=True, exclude=['id']).dump(event_thread)
             else:
-                tasks = {event.task for event in event_thread}
-                return TaskSchema(many=True).dump(tasks)
+                headers = {'x-gman-tasks-running': 0,
+                           'x-gman-tasks-completed': 0,
+                           'x-gman-tasks-failed': 0}
+                return None, 404, headers
+        except BadRequest:
+            return None, 400
+
+    def get_thread(self, thread_id, events=None):
+        event_thread = self.get_event_thread(thread_id)
+        if events:
+            return TaskEventSchema(many=True, exclude=['id']).dump(event_thread)
         else:
-            try:
-                task = Task.get(Task.task_id == task_id)
-            except DoesNotExist:
-                return self.NotFound
+            tasks = {event.task for event in event_thread}
+            return TaskSchema(many=True).dump(tasks)
 
-            if events:
-                events = self.get_task_events(task_id)
+    def get_task(self, task_id, events=None):
+        task = Task.get(Task.task_id == task_id)
 
-                if len(events):
-                    return TaskEventSchema(many=True, exclude=['id']).dump(events)
-                else:
-                    return self.NotFound
+        if events:
+            events = self.get_task_events(task_id)
+            return TaskEventSchema(many=True, exclude=['id']).dump(events)
+        else:
+            return TaskSchema().dump(task)
 
+    def get(self, task_id=None, events=None, thread_id=None):
+        try:
+            if thread_id:
+                return self.get_thread(thread_id, events)
+            elif task_id:
+                return self.get_task(task_id, events)
             else:
-                return TaskSchema().dump(task)
+                raise BadRequest('No action specified')
+        except (ZeroResults, DoesNotExist):
+            return self.NotFound()
+        except BadRequest as e:
+            return self.BadRequest(str(e))
 
     def put(self, task_id, events=None, json=None):
 
-        if events:
-            return self.NotFound
-
-        if json:
-            raw = json
-        else:
-            raw = request.get_json(force=True)
-
-        marshaller = GManMarshaller(raw)
-
         try:
+            if events:
+                raise BadRequest('Events may not be specified on a PUT')
+
+            if json:
+                raw = json
+            else:
+                raw = request.get_json(force=True)
+
+            marshaller = GManMarshaller(raw)
             marshaller.enforce('add_event')
             task = Task.get(Task.task_id == task_id)
             try:
-                # test for completed event
-                events = [x for x in
-                          (TaskEvent.select()
-                                    .join(Task)
-                                    .where(
-                                        (Task.task_id == task_id)
-                                        & (TaskEvent.status.in_(['failed', 'completed']))
-                                    ))]
-
+                completed = self.get_task_completed_event(task_id)
                 marshaller.errors.add('status',
-                                      f'A closing event for {events[0].task_id} of '
-                                      f'{events[0].status} already exists.')
+                                      f'A closing event for {completed.task_id} of '
+                                      f'{completed.status} already exists.')
 
                 return marshaller.errors.emit(), 422
-            except IndexError:
+            except ZeroResults:
                 pass
 
             event = TaskEvent.create(task=task,
                                      message=marshaller.event.data.message,
                                      status=marshaller.event.data.status,
                                      timestamp=marshaller.event.data.timestamp)
-
-            return TaskEventSchema(exclude=['id']).dump(event)
+            if event:
+                return TaskEventSchema().dump(event)
+            else:
+                raise QueryFailed(f'Event Creation Error for task_id {task_id}')
 
         except MarshalError as e:
             return e.errors.emit(), 422
         except DoesNotExist:
-            return self.NotFound
+            return self.NotFound()
+        except BadRequest as e:
+            return self.BadRequest(str(e))
+        except Exception as e:
+            return self.InternalError(str(e))
 
     def post(self, *args, **kwargs):
-        if 'task_id' in kwargs or 'events' in kwargs:
-            return {'message': 'Unprocessable request'}, 422
 
-        if 'json' in kwargs:
-            raw = kwargs['json']
-        else:
-            raw = request.get_json(force=True)
-
-        marshaller = GManMarshaller(raw)
         try:
+            if 'task_id' in kwargs or 'events' in kwargs:
+                raise BadRequest('Invalid args for this method')
+
+            if 'json' in kwargs:
+                raw = kwargs['json']
+            else:
+                raw = request.get_json(force=True)
+
+            marshaller = GManMarshaller(raw)
             marshaller.enforce('create_task')
             if marshaller.task.data.thread_id != marshaller.task.data.task_id:
                 Task.get(Task.task_id == marshaller.task.data.thread_id)
@@ -321,3 +241,7 @@ class GMan(Resource):
             matches = reg.search(str(e))
             marshaller.errors.add(matches.groups()[0], 'Is required but not valid')
             return marshaller.errors.emit(), 422
+        except BadRequest as e:
+            return self.BadRequest(str(e))
+        except Exception as e:
+            return self.InternalError(str(e))
