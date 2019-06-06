@@ -13,16 +13,14 @@ gman_task_create = {
     'project': 'gman_test_data',
     'caller': 'test_case_create_1',
     'status': 'started',
-    'message': 'a normal task creation body',
-    'thread_id': 'pytest'
+    'message': 'a normal task creation body'
 }
 
 gman_task_event = {
     'task_id': '{}',
     'status': '{}',
     'message': 'Testing with status {}',
-    'caller': 'test {}',
-    'thread_id': '{}'
+    'caller': 'test {}'
 }
 
 gman_task_create_post = [

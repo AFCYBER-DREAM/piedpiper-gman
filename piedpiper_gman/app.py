@@ -15,13 +15,16 @@ app.config['RESTFUL_JSON'] = {'cls': GManJSONEncoder}
 
 app.url_map.converters['hash'] = SRIConverter
 
-
 api = Api(app, catch_all_404s=True)
 
 api.add_resource(GMan,
                  '/gman',
                  '/gman/<uuid:task_id>',
-                 '/gman/<uuid:task_id>/<events>')
+                 '/gman/<uuid:task_id>/<events>',
+                 '/gman/thread/<uuid:thread_id>',
+                 '/gman/thread/<uuid:thread_id>/events',
+                 '/gman/thread/<uuid:thread_id>/tasks',
+                 )
 
 
 def app_setup(config_path=None, config=None):
