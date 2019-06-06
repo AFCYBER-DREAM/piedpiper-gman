@@ -13,7 +13,8 @@ gman_task_create = {
     'project': 'gman_test_data',
     'caller': 'test_case_create_1',
     'status': 'started',
-    'message': 'a normal task creation body'
+    'message': 'a normal task creation body',
+    'thread_id': 'pytest'
 }
 
 gman_task_event = {
@@ -48,7 +49,7 @@ gman_task_create_post = [
      422,
      [(lambda x: 'errors' in x, 'No error message returned'),
       (lambda x: 'status' in x['errors'],
-      'Task allowed status other then started for a creation event')]),
+       'Task allowed status other then started for a creation event')]),
     ({'run_id': '5',
       'task_id': 'ba279fdc-e11d-4bc8-828c-a44e35b55175',
       'project': 'pytest suite',
@@ -101,6 +102,21 @@ gman_task_create_post = [
     ]
 
 
+gman_put_statuses = [
+    ('started', 422),
+    ('completed', 200),
+    ('failed', 200),
+    ('delegated', 200),
+    ('received', 200),
+    ('info', 200)
+]
+
+
+@pytest.fixture
+def test_task(api, client):
+    return client.post(api.url_for(GMan), json=gman_task_create)
+
+
 @pytest.mark.parametrize('data,resp_code,tests', gman_task_create_post)
 def test_post(data, resp_code, tests, api, client):
     resp = client.post(api.url_for(GMan), json=data)
@@ -122,21 +138,6 @@ def test_post_w_task_id(api, client):
                        json=data)
 
     assert resp.status_code == 422, f'Invalid response code {resp.status_code}'
-
-
-gman_put_statuses = [
-    ('started', 422),
-    ('completed', 200),
-    ('failed', 200),
-    ('delegated', 200),
-    ('received', 200),
-    ('info', 200)
-]
-
-
-@pytest.fixture
-def test_task(api, client):
-    return client.post(api.url_for(GMan), json=gman_task_create)
 
 
 @pytest.mark.parametrize('status,resp_code', gman_put_statuses)

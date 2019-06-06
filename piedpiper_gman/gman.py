@@ -34,12 +34,15 @@ class GMan(Resource):
         else:
             return TaskSchema().dump(task)
 
-    def put(self, task_id, events=None):
+    def put(self, task_id, events=None, json=None):
 
         if events:
             return {'message': 'Not Found'}, 404
 
-        raw = request.get_json(force=True)
+        if json:
+            raw = json
+        else:
+            raw = request.get_json(force=True)
 
         now = datetime.datetime.now()
         event_marsh = TaskEventSchema().load(raw, partial=('timestamp',))
@@ -71,10 +74,15 @@ class GMan(Resource):
         return TaskEventSchema(exclude=['id']).dump(event)
 
     def post(self, *args, **kwargs):
-        if len(args) or len(kwargs):
+
+        if 'task_id' in kwargs or 'events' in kwargs:
             return {'message': 'Unprocessable request'}, 422
 
-        raw = request.get_json(force=True)
+        if 'json' in kwargs:
+            raw = kwargs['json']
+        else:
+            raw = request.get_json(force=True)
+
         errors = {'errors': {}}
 
         for disallowed in ('task_id', 'timestamp', 'thread_id'):
