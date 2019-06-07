@@ -47,42 +47,58 @@ class GManMarshaller(object):
         self._task = None
         self._event = None
 
-    def enforce(self, context):
-
-        self._task = TaskSchema().load(self.raw_data)
-        self._event = TaskEventSchema().load(self.raw_data, partial=('timestamp',))
-
-        try:
-            self._event.data.timestamp = datetime.datetime.now()
-        except AttributeError:
-            self._event.data['timestamp'] = datetime.datetime.now()
-
-        if self._task.errors:
-            self.errors.extend(self._task.errors)
-
-        if self._event.errors:
-            self.errors.extend(self._event.errors)
+    def enforce(self, context):  # noqa: C901
 
         if context == 'create_task':
+
+            self._task = TaskSchema().load(self.raw_data)
+            self._event = TaskEventSchema().load(self.raw_data, partial=('timestamp',))
+
+            try:
+                self._event.data.timestamp = datetime.datetime.now()
+            except AttributeError:
+                self._event.data['timestamp'] = datetime.datetime.now()
+
+            if self._task.errors:
+                self.errors.extend(self._task.errors)
+
+            if self._event.errors:
+                self.errors.extend(self._event.errors)
+
             disallowed = ('task_id', 'timestamp')
 
-            if self.raw_data['status'] not in ('started', 'received'):
+            if self.raw_data.get('status', '') not in ('started', 'received'):
                 self.errors.add('status',
                                 'Task creation must be \'started\' or \'received\'')
             else:
-                if (self.raw_data['status'] == 'received'
-                        and not len(self.raw_data['thread_id'])):
+                if (self.raw_data.get('status') == 'received'
+                        and not len(self.raw_data.get('thread_id', ''))):
                     self.errors.add('thread_id',
                                     'Thread_id is required for status received')
 
+                if (self.raw_data.get('status', '') == 'started'
+                        and not len(self.raw_data.get('thread_id', ''))):
+                    self._task.data.thread_id = self._task.data.task_id
+
         elif context == 'add_event':
             disallowed = ('caller', 'thread_id', 'timestamp', 'project', 'run_id')
+
+            self._event = TaskEventSchema().load(self.raw_data, partial=('timestamp',))
+
+            try:
+                self._event.data.timestamp = datetime.datetime.now()
+            except AttributeError:
+                self._event.data['timestamp'] = datetime.datetime.now()
+
+            if self._event.errors:
+                self.errors.extend(self._event.errors)
+
             if self.raw_data.get('status', '') in ('started', 'received'):
                 self.errors.add('status', 'Updates may not be value \'started\'')
 
         for key in disallowed:
             if key in self.raw_data:
-                self.errors.add(key, 'May not be specified on a post/create')
+                self.errors.add(key, f'May not be specified for {context}')
 
         if len(self.errors.errors):
             raise MarshalError(self.errors)
@@ -98,27 +114,103 @@ class GManMarshaller(object):
 
 class GMan(Resource):
 
-    def get(self, task_id, events=None):
+    def get_task_states(self, events):
+        '''Parses task events to identify which state the task is in.'''
 
-        try:
-            task = Task.get(Task.task_id == task_id)
-        except DoesNotExist:
-            return {'message': 'Not Found'}, 404
+        running = ('started', 'received')
+        completed = ('completed',)
+        failed = ('failed',)
 
-        if events:
-            events = [x for x in
-                      TaskEvent.select()
-                               .join(Task)
-                               .where(Task.task_id == task_id)
-                               .order_by(TaskEvent.timestamp)]
+        states = {'running': [],
+                  'completed': [],
+                  'failed': []}
 
-            if len(events):
-                return TaskEventSchema(many=True, exclude=['id']).dump(events).data
-            else:
+        for event in events:
+            if event.status in running:
+                if event.task not in states['running']:
+                    states['running'].append(event.task)
+            elif event.status in completed:
+                if event.task not in states['completed']:
+                    states['completed'].append(event.task)
+                if event.task in states['running']:
+                    states['running'].remove(event.task)
+            elif event.status in failed:
+                if event.task not in states['failed']:
+                    states['failed'].append(event.task)
+                if event.task in states['running']:
+                    states['running'].remove(event.task)
+
+        return states
+
+    def get_event_thread(self, thread_id):
+        return [x for x in
+                TaskEvent.select()
+                         .join(Task)
+                         .where(Task.thread_id == thread_id)
+                         .order_by(TaskEvent.timestamp)]
+
+    def get_task_events(self, task_id):
+        return [x for x in
+                TaskEvent.select()
+                         .join(Task)
+                         .where(Task.task_id == task_id)
+                         .order_by(TaskEvent.timestamp)]
+
+    def head(self, thread_id=None, events=None, task_id=None):
+
+        if thread_id:
+            task_events = self.get_event_thread(thread_id)
+        elif task_id:
+            task_events = self.get_task_events(task_id)
+
+        if len(task_events):
+
+            if task_id and events:
+                return None, 200, {'x-gman-events': len(task_events)}
+
+            states = self.get_task_states(task_events)
+            headers = {'x-gman-tasks-running': len(states['running']),
+                       'x-gman-tasks-completed': len(states['completed']),
+                       'x-gman-tasks-failed': len(states['failed'])}
+            return None, 200, headers
+        else:
+
+            if task_id and events:
+                return None, 404, {'x-gman-events': len(task_events)}
+
+            headers = {'x-gman-tasks-running': 0,
+                       'x-gman-tasks-completed': 0,
+                       'x-gman-tasks-failed': 0}
+            return None, 404, headers
+
+    def get(self,  task_id=None, events=None, thread_id=None):
+
+        if thread_id:
+            event_thread = self.get_event_thread(thread_id)
+            if not len(event_thread):
                 return {'message': 'Not Found'}, 404
 
+            if events:
+                return TaskEventSchema(many=True, exclude=['id']).dump(event_thread)
+            else:
+                tasks = {event.task for event in event_thread}
+                return TaskSchema(many=True).dump(tasks)
         else:
-            return TaskSchema().dump(task)
+            try:
+                task = Task.get(Task.task_id == task_id)
+            except DoesNotExist:
+                return {'message': 'Not Found'}, 404
+
+            if events:
+                events = self.get_task_events(task_id)
+
+                if len(events):
+                    return TaskEventSchema(many=True, exclude=['id']).dump(events)
+                else:
+                    return {'message': 'Not Found'}, 404
+
+            else:
+                return TaskSchema().dump(task)
 
     def put(self, task_id, events=None, json=None):
 
@@ -135,11 +227,28 @@ class GMan(Resource):
         try:
             marshaller.enforce('add_event')
             task = Task.get(Task.task_id == task_id)
+            try:
+                # test for completed event
+                events = [x for x in
+                          (TaskEvent.select()
+                                    .join(Task)
+                                    .where(
+                                        (Task.task_id == task_id)
+                                        & (TaskEvent.status.in_(['failed', 'completed']))
+                                    ))]
+
+                marshaller.errors.add('status',
+                                      f'A closing event for {events[0].task_id} of '
+                                      f'{events[0].status} already exists.')
+
+                return marshaller.errors.emit(), 422
+            except IndexError:
+                pass
 
             event = TaskEvent.create(task=task,
-                                     message=marshaller.event.message,
-                                     status=marshaller.event.status,
-                                     timestamp=marshaller.event.timestamp)
+                                     message=marshaller.event.data.message,
+                                     status=marshaller.event.data.status,
+                                     timestamp=marshaller.event.data.timestamp)
 
             return TaskEventSchema(exclude=['id']).dump(event)
 
@@ -160,7 +269,7 @@ class GMan(Resource):
         marshaller = GManMarshaller(raw)
         try:
             marshaller.enforce('create_task')
-            if marshaller.task.data.thread_id:
+            if marshaller.task.data.thread_id != marshaller.task.data.task_id:
                 Task.get(Task.task_id == marshaller.task.data.thread_id)
 
             task = Task.create(task_id=marshaller.task.data.task_id,
@@ -184,6 +293,6 @@ class GMan(Resource):
             return marshaller.errors.emit(), 422
         except AttributeError as e:
             reg = re.compile(r" '(.+)'")
-            matches = reg.search(reg, str(e))
-            marshaller.error.add(matches.groups()[0], 'Is required but not valid')
+            matches = reg.search(str(e))
+            marshaller.errors.add(matches.groups()[0], 'Is required but not valid')
             return marshaller.errors.emit(), 422
