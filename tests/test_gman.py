@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from piedpiper_gman.gman import GMan
+from piedpiper_gman.gman import GMan, Errors
 
 from piedpiper_gman.orm.models import (Task, TaskEvent)
 #                                        TaskSchema, TaskEventSchema)
@@ -65,7 +65,7 @@ gman_task_create_post = [
       'thread_id': 'ba279fdc-e11d-4bc8-828c-a44e35b55175',
       'message': 'thread_id must be an existing task_id'},
      422,
-     [(lambda x: 'thread_id must be an existing task_id' in x['errors']['thread_id'],
+     [(lambda x: 'Thread_id must be an existing task_id' in x['errors']['thread_id'],
        'thread_id was allowed for not existing task')]),
     ({'run_id': '7',
       'project': '9435b705-fbca-49a9-a4ab-400cc932bdd1',
@@ -110,7 +110,7 @@ gman_put_statuses = [
 
 
 @pytest.fixture
-def test_task(api, client):
+def testtask(api, client):
     return client.post(api.url_for(GMan), json=gman_task_create)
 
 
@@ -137,9 +137,55 @@ def test_post_w_task_id(api, client):
     assert resp.status_code == 422, f'Invalid response code {resp.status_code}'
 
 
+gman_post_delegated = [
+        ({'run_id': '1',
+          'project': 'pytest suite',
+          'caller': 'test_post_delegated_1',
+          'status': 'received',
+          'message': 'test create with status == received no thread_id'},
+         422,
+         [(lambda x: 'Thread_id is required for status received'
+                     in x['errors']['thread_id'],
+                     'thread_id was not required for status received')]),
+        ({'run_id': '2',
+          'project': 'pytest suite',
+          'caller': 'test_post_delegated_2',
+          'status': 'received',
+          'thread_id': '9435b705-fbca-49a9-a4ab-400cc932bdd1',
+          'message': 'test create with status == received bad thread_id'},
+         422,
+         [(lambda x: 'Thread_id must be an existing task_id'
+                     in x['errors']['thread_id'],
+                     'thread_id was allowed to be created for a non-existing task')]),
+        ({'run_id': '3',
+          'project': 'pytest suite',
+          'caller': 'test_post_delegated_3',
+          'status': 'received',
+          'thread_id': '{}',
+          'message': 'test create with status == received good thread_id'},
+         200,
+         [(lambda x: 'errors' not in x, 'errors detected on expected good post')]),
+        ]
+
+
+@pytest.mark.parametrize('data,resp_code,tests', gman_post_delegated)
+def test_post_delegated(data, resp_code, tests, api, client, testtask):
+    thread_id = testtask.json['task']['task_id']
+
+    if 'thread_id' in data and data['thread_id'] == '{}':
+        data['thread_id'] = data['thread_id'].format(thread_id)
+    resp = client.post(api.url_for(GMan), json=data)
+
+    assert resp.status_code == resp_code, f'Invalid response code {resp_code}'
+
+    if tests and len(tests):
+        for test in tests:
+            assert test[0](resp.json), test[1]
+
+
 @pytest.mark.parametrize('status,resp_code', gman_put_statuses)
-def test_put_statuses(status, resp_code, api, client, test_task):
-    task_id = test_task.json['task']['task_id']
+def test_put_statuses(status, resp_code, api, client, testtask):
+    task_id = testtask.json['task']['task_id']
     event = {
         'status': status,
         'message': f'Testing with status {status}'
@@ -149,8 +195,8 @@ def test_put_statuses(status, resp_code, api, client, test_task):
     assert resp.status_code == resp_code, f'Invalid response code {resp_code}'
 
 
-def test_put_bad_body(api, client, test_task):
-    task_id = test_task.json['task']['task_id']
+def test_put_bad_body(api, client, testtask):
+    task_id = testtask.json['task']['task_id']
     event = {
         'status': 'asdfasdfsd',
         'message': f'Testing with status info bad body',
@@ -175,9 +221,9 @@ def test_put_bad_task_id(api, client):
     assert resp.status_code == 404, f'Expected 404 but got {resp.status_code}'
 
 
-def test_put_w_events(api, client, test_task):
+def test_put_w_events(api, client, testtask):
 
-    task_id = test_task.json['task']['task_id']
+    task_id = testtask.json['task']['task_id']
     event = {
         'status': 'info',
         'message': f'Testing with status info with /events',
@@ -194,8 +240,8 @@ def test_get_bad_id(api, client):
     assert resp.status_code == 404
 
 
-def test_get_task(api, client, test_task):
-    task_id = test_task.json['task']['task_id']
+def test_get_task(api, client, testtask):
+    task_id = testtask.json['task']['task_id']
 
     resp = client.get(api.url_for(GMan, task_id=task_id))
 
@@ -203,8 +249,8 @@ def test_get_task(api, client, test_task):
     assert resp.json['task_id'] == task_id, 'Bad task_id returned'
 
 
-def test_get_task_events(api, client, test_task):
-    task_id = test_task.json['task']['task_id']
+def test_get_task_events(api, client, testtask):
+    task_id = testtask.json['task']['task_id']
 
     event = {
         'status': 'info',
@@ -223,8 +269,8 @@ def test_get_task_events(api, client, test_task):
 
 
 @pytest.mark.parametrize('status', ['failed', 'completed'])
-def test_put_info_failed_event(status, api, client, test_task):
-    task_id = test_task.json['task']['task_id']
+def test_put_info_failed_event(status, api, client, testtask):
+    task_id = testtask.json['task']['task_id']
 
     event = {
         'status': f'{status}',
@@ -245,8 +291,8 @@ def test_put_info_failed_event(status, api, client, test_task):
     assert 'A closing event for' in str(resp.json['errors']['status'])
 
 
-def test_get_task_events_no_events(api, client, test_task):
-    task_id = test_task.json['task']['task_id']
+def test_get_task_events_no_events(api, client, testtask):
+    task_id = testtask.json['task']['task_id']
 
     task = Task.get(Task.task_id == task_id)
 
@@ -265,25 +311,9 @@ def test_get_task_events_no_events(api, client, test_task):
     assert resp.status_code == 404
 
 
-def test_head_task_id(api, client, test_task):
+def test_head_task_id(api, client, testtask):
 
-    task_id = test_task.json['task']['task_id']
-
-    event = {
-        'status': f'info',
-        'message': f'Testing with status info',
-    }
-
-    resp = client.put(api.url_for(GMan, task_id=task_id), json=event)
-    assert resp.status_code == 200, 'first part closing event with {status} failed'
-
-    resp = client.head(f'/gman/{task_id}', json=event)
-    assert 'x-gman-tasks-running' in resp.headers
-
-
-def test_head_task_id_events(api, client, test_task):
-
-    task_id = test_task.json['task']['task_id']
+    task_id = testtask.json['task']['task_id']
 
     event = {
         'status': f'info',
@@ -293,14 +323,31 @@ def test_head_task_id_events(api, client, test_task):
     resp = client.put(api.url_for(GMan, task_id=task_id), json=event)
     assert resp.status_code == 200, 'first part closing event with {status} failed'
 
-    resp = client.head(f'/gman/{task_id}/events', json=event)
+    resp = client.head(f'/task/{task_id}')
+    assert resp.headers['x-gman-task-state'] == 'running'
+
+
+def test_head_task_id_events(api, client, testtask):
+
+    task_id = testtask.json['task']['task_id']
+
+    event = {
+        'status': f'info',
+        'message': f'Testing with status info',
+    }
+
+    resp = client.put(api.url_for(GMan, task_id=task_id), json=event)
+    assert resp.status_code == 200, 'first part closing event with {status} failed'
+
+    resp = client.head(f'/task/{task_id}/events')
     assert 'x-gman-events' in resp.headers
     assert int(resp.headers['x-gman-events']) == 2
 
 
-def test_head_thread_id_events(api, client, test_task):
+@pytest.fixture
+def testthread(api, client, testtask):
 
-    task_id = test_task.json['task']['task_id']
+    task_id = testtask.json['task']['task_id']
 
     event = {
         'status': f'info',
@@ -314,12 +361,12 @@ def test_head_thread_id_events(api, client, test_task):
         'thread_id': task_id,
         'message': 'adding an open task',
         'status': 'received',
-        'run_id': test_task.json['task']['run_id'],
+        'run_id': testtask.json['task']['run_id'],
         'caller': 'pytest_next_task',
         'project': 'pytest'
     }
 
-    resp = client.post('/gman', json=new_task)
+    resp = client.post(api.url_for(GMan), json=new_task)
     assert resp.status_code == 200, 'failed to create delegated task'
 
     event = {
@@ -338,11 +385,93 @@ def test_head_thread_id_events(api, client, test_task):
     resp = client.put(api.url_for(GMan, task_id=task_id), json=event)
     assert resp.status_code == 200, 'first part closing event with status completed'
 
-    resp = client.head(f'/gman/thread/{task_id}', json=event)
+    event = {
+        'status': f'failed',
+        'message': f'Testing with status failed',
+    }
+
+    task2_resp = client.post(api.url_for(GMan), json=new_task)
+    assert resp.status_code == 200, 'failed to create delegated task2'
+
+    resp = client.put(api.url_for(GMan, task_id=task2_resp.json['task']['task_id']),
+                      json=event)
+    assert resp.status_code == 200, 'first part closing event with status completed'
+
+    return task_id
+
+
+def test_head_thread_events(api, client, testthread):
+    resp = client.head(f'/thread/{testthread}')
     assert 'x-gman-tasks-running' in resp.headers
     assert 'x-gman-tasks-completed' in resp.headers
     assert 'x-gman-tasks-failed' in resp.headers
 
     assert int(resp.headers['x-gman-tasks-completed']) == 1
     assert int(resp.headers['x-gman-tasks-running']) == 1
+    assert int(resp.headers['x-gman-tasks-failed']) == 1
+
+
+def test_get_thread(api, client, testthread):
+
+    resp = client.get(f'/thread/{testthread}')
+
+    assert resp.status_code == 200
+    for task in resp.json:
+        assert 'task_id' in task, 'not a valid task json response'
+
+
+def test_get_thread_events(api, client, testthread):
+
+    resp = client.get(f'/thread/{testthread}/events')
+
+    assert resp.status_code == 200
+    for event in resp.json:
+        assert 'task' in event, 'not a valid task event, must have a task'
+        assert isinstance(event['task'], dict), 'task must be a dict'
+
+
+def test_get_thread_bad_id(api, client):
+    resp = client.get('/thread/9435b705-fbca-49a9-a4ab-400cc932bdd1')
+    assert resp.status_code == 404
+
+
+def test_head_non_existing_thread(api, client):
+    resp = client.head('/thread/9435b705-fbca-49a9-a4ab-400cc932bdd1')
+    assert int(resp.headers['x-gman-tasks-completed']) == 0
+    assert int(resp.headers['x-gman-tasks-running']) == 0
     assert int(resp.headers['x-gman-tasks-failed']) == 0
+
+
+def test_head_non_existing_task_events(api, client):
+    resp = client.head(f'/task/9435b705-fbca-49a9-a4ab-400cc932bdd1/events')
+    assert int(resp.headers['x-gman-events']) == 0
+
+
+def test_head_non_existing_task(api, client):
+    resp = client.head(f'/task/9435b705-fbca-49a9-a4ab-400cc932bdd1')
+    assert resp.headers['x-gman-task-state'] == 'not found'
+
+
+def test_head_gman_task(api, client, testtask):
+
+    resp = client.head('/task')
+    resp.status_code == 404
+
+
+def test_errors_extend_is_dict():
+
+    errors = Errors()
+
+    with pytest.raises(AssertionError):
+        errors.extend('something')
+
+
+def test_errors_extend():
+
+    errors = Errors()
+
+    errors.extend({'x': ['this is a test error']})
+    errors.extend({'x': ['another test']})
+
+    assert 'this is a test error' in errors.errors['x']
+    assert 'another test' in errors.errors['x']

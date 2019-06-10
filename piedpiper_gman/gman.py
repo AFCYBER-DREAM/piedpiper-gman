@@ -21,6 +21,7 @@ class Errors(object):
         self.errors.setdefault(key, []).append(error)
 
     def extend(self, errors):
+        assert isinstance(errors, dict)
         for key, errs in errors.items():
             if key in self.errors:
                 self.errors[key].extend(errs)
@@ -94,7 +95,8 @@ class GManMarshaller(object):
                 self.errors.extend(self._event.errors)
 
             if self.raw_data.get('status', '') in ('started', 'received'):
-                self.errors.add('status', 'Updates may not be value \'started\'')
+                self.errors.add('status',
+                                'Updates may not be value \'started\' or \'received\'')
 
         for key in disallowed:
             if key in self.raw_data:
@@ -113,6 +115,10 @@ class GManMarshaller(object):
 
 
 class GMan(Resource):
+
+    @property
+    def NotFound(self):
+        return {'message': 'Not Found'}, 404
 
     def get_task_states(self, events):
         '''Parses task events to identify which state the task is in.'''
@@ -158,15 +164,24 @@ class GMan(Resource):
 
     def head(self, thread_id=None, events=None, task_id=None):
 
+        if not (thread_id or task_id):
+            return None, 404
+
         if thread_id:
             task_events = self.get_event_thread(thread_id)
-        elif task_id:
+        else:
             task_events = self.get_task_events(task_id)
 
         if len(task_events):
 
-            if task_id and events:
-                return None, 200, {'x-gman-events': len(task_events)}
+            if task_id:
+                if events:
+                    return None, 200, {'x-gman-events': len(task_events)}
+                else:
+                    # 1 task, should have a single state so find it
+                    state = [k for k, v in self.get_task_states(task_events).items()
+                             if len(v)][0]
+                    return None, 200, {'x-gman-task-state': state}
 
             states = self.get_task_states(task_events)
             headers = {'x-gman-tasks-running': len(states['running']),
@@ -175,8 +190,11 @@ class GMan(Resource):
             return None, 200, headers
         else:
 
-            if task_id and events:
-                return None, 404, {'x-gman-events': len(task_events)}
+            if task_id:
+                if events:
+                    return None, 404, {'x-gman-events': 0}
+                else:
+                    return None, 404, {'x-gman-task-state': 'not found'}
 
             headers = {'x-gman-tasks-running': 0,
                        'x-gman-tasks-completed': 0,
@@ -188,7 +206,7 @@ class GMan(Resource):
         if thread_id:
             event_thread = self.get_event_thread(thread_id)
             if not len(event_thread):
-                return {'message': 'Not Found'}, 404
+                return self.NotFound
 
             if events:
                 return TaskEventSchema(many=True, exclude=['id']).dump(event_thread)
@@ -199,7 +217,7 @@ class GMan(Resource):
             try:
                 task = Task.get(Task.task_id == task_id)
             except DoesNotExist:
-                return {'message': 'Not Found'}, 404
+                return self.NotFound
 
             if events:
                 events = self.get_task_events(task_id)
@@ -207,7 +225,7 @@ class GMan(Resource):
                 if len(events):
                     return TaskEventSchema(many=True, exclude=['id']).dump(events)
                 else:
-                    return {'message': 'Not Found'}, 404
+                    return self.NotFound
 
             else:
                 return TaskSchema().dump(task)
@@ -215,7 +233,7 @@ class GMan(Resource):
     def put(self, task_id, events=None, json=None):
 
         if events:
-            return {'message': 'Not Found'}, 404
+            return self.NotFound
 
         if json:
             raw = json
@@ -255,7 +273,7 @@ class GMan(Resource):
         except MarshalError as e:
             return e.errors.emit(), 422
         except DoesNotExist:
-            return {'message': 'Not Found'}, 404
+            return self.NotFound
 
     def post(self, *args, **kwargs):
         if 'task_id' in kwargs or 'events' in kwargs:
@@ -289,7 +307,7 @@ class GMan(Resource):
             return e.errors.emit(), 422
         except DoesNotExist:
             marshaller.errors.add('thread_id',
-                                  'thread_id must be an existing task_id')
+                                  'Thread_id must be an existing task_id')
             return marshaller.errors.emit(), 422
         except AttributeError as e:
             reg = re.compile(r" '(.+)'")

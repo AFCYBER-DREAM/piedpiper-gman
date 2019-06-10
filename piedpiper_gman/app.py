@@ -18,11 +18,11 @@ app.url_map.converters['hash'] = SRIConverter
 api = Api(app, catch_all_404s=True)
 
 api.add_resource(GMan,
-                 '/gman',
-                 '/gman/<uuid:task_id>',
-                 '/gman/<uuid:task_id>/<events>',
-                 '/gman/thread/<uuid:thread_id>',
-                 '/gman/thread/<uuid:thread_id>/<events>'
+                 '/task',
+                 '/task/<uuid:task_id>',
+                 '/task/<uuid:task_id>/<events>',
+                 '/thread/<uuid:thread_id>',
+                 '/thread/<uuid:thread_id>/<events>'
                  )
 
 
