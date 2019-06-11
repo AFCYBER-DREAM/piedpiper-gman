@@ -16,6 +16,8 @@ class Task(Model):
     task_id = TextField(primary_key=True, default=uuid.uuid4)
     run_id = TextField(null=False)
     project = TextField(null=False)
+    caller = TextField(null=False)
+    thread_id = TextField(null=True)
 
     class Meta:
         database = db
@@ -24,7 +26,6 @@ class Task(Model):
 class TaskEvent(Model):
     task = ForeignKeyField(Task)
     timestamp = DateTimeField()
-    caller = TextField(null=False)
     status = TextField(null=False, choices=(('started', 'started'),
                                             ('completed', 'completed'),
                                             ('failed', 'failed'),
@@ -32,7 +33,6 @@ class TaskEvent(Model):
                                             ('received', 'received'),
                                             ('info', 'info')))
     message = TextField(null=False)
-    thread_id = TextField(null=True)
 
     class Meta:
         database = db
