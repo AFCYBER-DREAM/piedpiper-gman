@@ -86,7 +86,24 @@ gman_task_create_post = [
       'status': 'started',
       'message': 'testing missing run_id'},
      422,
-     [(lambda x: 'errors' in x, 'No error message returned')])
+     [(lambda x: 'errors' in x, 'No error message returned')]),
+    ({'project': 'pytest suite',
+      'caller': 'test_case_11',
+      'status': 'started',
+      'return_code': 'bad_value',
+      'run_id': '5',
+      'message': 'testing invalid return_code'},
+     422,
+     [(lambda x: 'errors' in x, 'No error message returned'),
+      (lambda x: 'return_code' in x['errors'], 'Return code check missing')]),
+    ({'project': 'pytest suite',
+      'caller': 'test_case_12',
+      'status': 'started',
+      'return_code': 21,
+      'run_id': '5',
+      'message': 'testing invalid return_code'},
+     200,
+     [(lambda x: 'return_code' in x, 'return_code not in task')])
     ]
 
 
@@ -103,9 +120,7 @@ gman_put_statuses = [
 @pytest.mark.parametrize('data,resp_code,tests', gman_task_create_post)
 def test_post(data, resp_code, tests, api, client):
     resp = client.post(api.url_for(GMan), json=data)
-
     assert resp.status_code == resp_code, f'Invalid response code {resp_code}'
-
     if tests:
         for test in tests:
             assert test[0](resp.json), test[1]
