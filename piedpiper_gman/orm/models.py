@@ -9,6 +9,7 @@ from marshmallow_peewee.convert import ModelConverter
 from peewee import (DatabaseProxy,
                     DateTimeField,
                     ForeignKeyField,
+                    IntegerField,
                     Model,
                     DoesNotExist,
                     SqliteDatabase,
@@ -96,6 +97,7 @@ class TaskEvent(Model):
                                             ('received', 'received'),
                                             ('info', 'info')))
     message = TextField(null=False)
+    return_code = IntegerField(null=True)
 
     class Meta:
         database = db
