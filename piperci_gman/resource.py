@@ -22,18 +22,21 @@ class PiperCiResource(Resource):
     def get_task_states(self, events):
         '''Parses task events to identify which state the task is in.'''
 
-        running = ('started', 'received')
+        running = ('started', 'received',)
         completed = ('completed',)
         failed = ('failed',)
 
         states = {'running': [],
                   'completed': [],
-                  'failed': []}
+                  'failed': [],
+                  'pending': []}
 
         for event in events:
             if event.status in running:
                 if event.task not in states['running']:
                     states['running'].append(event.task)
+                if event.status == 'received':
+                    states['pending'].pop()
             elif event.status in completed:
                 if event.task not in states['completed']:
                     states['completed'].append(event.task)
@@ -44,6 +47,9 @@ class PiperCiResource(Resource):
                     states['failed'].append(event.task)
                 if event.task in states['running']:
                     states['running'].remove(event.task)
+            elif event.status == 'delegated':
+                if event.task not in states['pending']:
+                    states['pending'].append(event.task)
 
         return states
 
