@@ -1,0 +1,9 @@
+flask-restful
+attrdict
+pyyaml
+peewee
+requests
+marshmallow==2.19.2
+Marshmallow-Peewee
+subresource-integrity
+piperci@git+https://github.com/AFCYBER-DREAM/python-piperci.git
