@@ -23,6 +23,8 @@ api.add_resource(GMan,
                  '/task',
                  '/task/<uuid:task_id>',
                  '/task/<uuid:task_id>/<events>',
+                 '/task/<run_id>',
+                 '/task/<run_id>/<events>',
                  '/thread/<uuid:thread_id>',
                  '/thread/<uuid:thread_id>/<events>'
                  )

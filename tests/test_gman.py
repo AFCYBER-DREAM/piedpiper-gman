@@ -248,13 +248,27 @@ def test_put_w_events(api, client, testtask):
     assert resp.status_code == 400, f'Expected 400 but got {resp.status_code}'
 
 
-def test_get_bad_id(api, client):
+def test_get_bad_run_id(api, client):
+    resp = client.get(api.url_for(GMan, run_id='bad_run_id_22'))
+
+    assert resp.status_code == 404
+
+
+def test_get_by_run_id(api, client, testtask):
+    run_id = testtask().json['task']['run_id']
+    resp = client.get(api.url_for(GMan, run_id=run_id))
+
+    assert resp.status_code == 200
+    assert resp.json['run_id'] == run_id, 'Bad run_id returned'
+
+
+def test_get_bad_task_id(api, client):
     resp = client.get(api.url_for(GMan, task_id=uuid.uuid4()))
 
     assert resp.status_code == 404
 
 
-def test_get_task(api, client, testtask):
+def test_get_by_task_id(api, client, testtask):
     task_id = testtask().json['task']['task_id']
 
     resp = client.get(api.url_for(GMan, task_id=task_id))
