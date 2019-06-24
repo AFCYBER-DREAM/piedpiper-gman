@@ -22,28 +22,49 @@ class PiperCiResource(Resource):
     def get_task_states(self, events):
         '''Parses task events to identify which state the task is in.'''
 
-        running = ('started', 'received')
+        running = ('started', 'received',)
         completed = ('completed',)
         failed = ('failed',)
 
         states = {'running': [],
                   'completed': [],
-                  'failed': []}
+                  'failed': [],
+                  'pending': []}
 
         for event in events:
             if event.status in running:
-                if event.task not in states['running']:
-                    states['running'].append(event.task)
+                if event.task not in [event.task for event in states['running']]:
+                    states['running'].append(event)
+                if event.status == 'received':
+                    task_event = next((
+                        task_event for task_event
+                        in states['pending']
+                        if event.task.thread_id == task_event.task.thread_id
+                    ), None)
+                    states['pending'].remove(task_event) if task_event else None
             elif event.status in completed:
-                if event.task not in states['completed']:
-                    states['completed'].append(event.task)
-                if event.task in states['running']:
-                    states['running'].remove(event.task)
+                if event.task not in [event.task for event in states['completed']]:
+                    states['completed'].append(event)
+                if event.task in [event.task for event in states['running']]:
+                    task_event = next((
+                        task_event for task_event
+                        in states['running']
+                        if event.task.thread_id == task_event.task.thread_id
+                    ), None)
+                    states['running'].remove(task_event) if task_event else None
             elif event.status in failed:
-                if event.task not in states['failed']:
-                    states['failed'].append(event.task)
-                if event.task in states['running']:
-                    states['running'].remove(event.task)
+                if event.task not in [event.task for event in states['failed']]:
+                    states['failed'].append(event)
+                if event.task in [event.task for event in states['running']]:
+                    task_event = next((
+                        task_event for task_event
+                        in states['running']
+                        if event.task.thread_id == task_event.task.thread_id
+                    ), None)
+                    states['running'].remove(task_event) if task_event else None
+            elif event.status == 'delegated':
+                if event.task not in [event.task for event in states['pending']]:
+                    states['pending'].append(event)
 
         return states
 

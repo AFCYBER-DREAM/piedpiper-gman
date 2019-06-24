@@ -399,6 +399,13 @@ def testthread(api, client, testtask):
     resp = client.put(api.url_for(GMan, task_id=task_id), json=event)
     assert resp.status_code == 200, 'first part closing event with {status} info'
 
+    event = {
+        'status': f'delegated',
+        'message': f'Delegated new task {resp.json["task"]["task_id"]}',
+    }
+    resp = client.put(api.url_for(GMan, task_id=task_id), json=event)
+    assert resp.status_code == 200, 'marking a delegated task'
+
     new_task = {
         'thread_id': task_id,
         'message': 'adding an open task',
@@ -408,16 +415,8 @@ def testthread(api, client, testtask):
         'project': 'pytest'
     }
 
-    resp = testtask(json=new_task)
-    assert resp.status_code == 200, 'failed to create delegated task'
-
-    event = {
-        'status': f'delegated',
-        'message': f'Delegated new task {resp.json["task"]["task_id"]}',
-    }
-
-    resp = client.put(api.url_for(GMan, task_id=task_id), json=event)
-    assert resp.status_code == 200, 'marking a delegated task'
+    task2_resp = client.post(api.url_for(GMan), json=new_task)
+    assert resp.status_code == 200, 'failed to create delegated task2'
 
     event = {
         'status': f'completed',
@@ -432,9 +431,6 @@ def testthread(api, client, testtask):
         'message': f'Testing with status failed',
     }
 
-    task2_resp = client.post(api.url_for(GMan), json=new_task)
-    assert resp.status_code == 200, 'failed to create delegated task2'
-
     resp = client.put(api.url_for(GMan, task_id=task2_resp.json['task']['task_id']),
                       json=event)
     assert resp.status_code == 200, 'first part closing event with status completed'
@@ -447,10 +443,67 @@ def test_head_thread_events(api, client, testthread):
     assert 'x-gman-tasks-running' in resp.headers
     assert 'x-gman-tasks-completed' in resp.headers
     assert 'x-gman-tasks-failed' in resp.headers
+    assert 'x-gman-tasks-pending' in resp.headers
 
     assert int(resp.headers['x-gman-tasks-completed']) == 1
-    assert int(resp.headers['x-gman-tasks-running']) == 1
+    assert int(resp.headers['x-gman-tasks-running']) == 0
     assert int(resp.headers['x-gman-tasks-failed']) == 1
+    assert int(resp.headers['x-gman-tasks-pending']) == 0
+
+
+def test_head_thread_events_fails_before_received(api, client, testtask):
+    task = testtask()
+    task_id = task.json['task']['task_id']
+    event = {
+        'status': f'delegated',
+        'message': f'Delegated new task',
+    }
+    client.put(api.url_for(GMan, task_id=task_id), json=event)
+    event = {
+        'status': f'completed',
+        'message': f'Testing with status completed',
+    }
+    client.put(api.url_for(GMan, task_id=task_id), json=event)
+    resp = client.head(f'/thread/{task_id}')
+    assert int(resp.headers['x-gman-tasks-completed']) == 1
+    assert int(resp.headers['x-gman-tasks-running']) == 0
+    assert int(resp.headers['x-gman-tasks-failed']) == 0
+    assert int(resp.headers['x-gman-tasks-pending']) == 1
+
+
+def test_head_thread_events_fails_during_received(api, client, testtask):
+    task = testtask()
+    task_id = task.json['task']['task_id']
+    event = {
+        'status': f'delegated',
+        'message': f'Delegated new task',
+    }
+    client.put(api.url_for(GMan, task_id=task_id), json=event)
+    event = {
+        'status': f'completed',
+        'message': f'Testing with status completed',
+    }
+    client.put(api.url_for(GMan, task_id=task_id), json=event)
+    new_task = {
+        'thread_id': task_id,
+        'message': 'adding an open task',
+        'status': 'received',
+        'run_id': task.json['task']['run_id'],
+        'caller': 'pytest_next_task',
+        'project': 'pytest'
+    }
+    task2_resp = client.post(api.url_for(GMan), json=new_task)
+    event = {
+        'status': f'failed',
+        'message': f'Testing with status failed',
+    }
+    client.put(api.url_for(GMan, task_id=task2_resp.json['task']['task_id']),
+               json=event)
+    resp = client.head(f'/thread/{task_id}')
+    assert int(resp.headers['x-gman-tasks-completed']) == 1
+    assert int(resp.headers['x-gman-tasks-running']) == 0
+    assert int(resp.headers['x-gman-tasks-failed']) == 1
+    assert int(resp.headers['x-gman-tasks-pending']) == 0
 
 
 def test_get_thread(api, client, testthread):

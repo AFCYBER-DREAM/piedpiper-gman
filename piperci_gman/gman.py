@@ -102,6 +102,7 @@ class GMan(PiperCiResource):
                 states = self.get_task_states(task_events)
                 headers = {'x-gman-tasks-running': len(states['running']),
                            'x-gman-tasks-completed': len(states['completed']),
+                           'x-gman-tasks-pending': len(states['pending']),
                            'x-gman-tasks-failed': len(states['failed'])}
                 return None, 200, headers
             elif task_id:
@@ -124,7 +125,8 @@ class GMan(PiperCiResource):
             else:
                 headers = {'x-gman-tasks-running': 0,
                            'x-gman-tasks-completed': 0,
-                           'x-gman-tasks-failed': 0}
+                           'x-gman-tasks-failed': 0,
+                           'x-gman-tasks-pending': 0}
                 return None, 404, headers
         except BadRequest:
             return None, 400
