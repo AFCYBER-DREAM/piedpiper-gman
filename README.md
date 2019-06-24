@@ -2,7 +2,7 @@
 `python index.py`
 
 ## Install
-`python setup.py install`
+`pip install -e .`
 
 ## Testing
 

@@ -137,8 +137,14 @@ class GMan(PiedPiperResource):
             tasks = {event.task for event in event_thread}
             return TaskSchema(many=True).dump(tasks)
 
-    def get_task(self, task_id, events=None):
-        task = Task.get(Task.task_id == task_id)
+    def get_task(self, task_id=None, run_id=None, events=None):
+        if task_id:
+            task = Task.get(Task.task_id == task_id)
+        elif run_id:
+            task = Task.get(Task.run_id == run_id)
+            task_id = task.task_id
+        else:
+            return
 
         if events:
             events = self.get_task_events(task_id)
@@ -146,12 +152,14 @@ class GMan(PiedPiperResource):
         else:
             return TaskSchema().dump(task)
 
-    def get(self, task_id=None, events=None, thread_id=None):
+    def get(self, task_id=None, run_id=None, events=None, thread_id=None):
         try:
             if thread_id:
                 return self.get_thread(thread_id, events)
             elif task_id:
-                return self.get_task(task_id, events)
+                return self.get_task(task_id=task_id, events=events)
+            elif run_id:
+                return self.get_task(run_id=run_id, events=events)
             else:
                 raise BadRequest('No action specified')
         except (ZeroResults, DoesNotExist):
