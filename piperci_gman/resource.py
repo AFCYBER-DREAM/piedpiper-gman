@@ -1,9 +1,9 @@
 from flask_restful import Resource
 
-from piedpiper_gman.orm.models import (Artifact, Task, TaskEvent, ZeroResults)
+from piperci_gman.orm.models import (Artifact, Task, TaskEvent, ZeroResults)
 
 
-class PiedPiperResource(Resource):
+class PiperCiResource(Resource):
 
     def BadRequest(self, message=None):
         message = f': {message}' if message else ''

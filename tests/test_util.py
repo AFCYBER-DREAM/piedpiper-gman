@@ -1,11 +1,11 @@
 import uuid
 import json
 import pytest
-from piedpiper import sri
+from piperci import sri
 
-from piedpiper_gman.util import (GManJSONEncoder, Api)
-from piedpiper_gman.gman import GMan
-from piedpiper_gman.artman import ArtMan
+from piperci_gman.util import (GManJSONEncoder, Api)
+from piperci_gman.gman import GMan
+from piperci_gman.artman import ArtMan
 from pytest import raises
 
 
@@ -88,7 +88,7 @@ def test_unhandled_error(client, api, monkeypatch):
 
         return h_errors(self, e)
 
-    monkeypatch.setattr('piedpiper_gman.util.Api.handle_error', handle_error_stub)
+    monkeypatch.setattr('piperci_gman.util.Api.handle_error', handle_error_stub)
 
     resp = client.put(api.url_for(GMan))
 

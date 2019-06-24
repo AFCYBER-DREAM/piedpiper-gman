@@ -2,8 +2,8 @@ import datetime
 
 import pytest
 
-from piedpiper_gman.artman import ArtMan
-from piedpiper_gman.orm.models import Artifact, Task, TaskEvent, db
+from piperci_gman.artman import ArtMan
+from piperci_gman.orm.models import Artifact, Task, TaskEvent, db
 
 _artifacts = [
     {'uri': 'https://someminio.example.com/art1',
@@ -242,7 +242,7 @@ def test_failed_artifact_create_IDK(api, client, monkeypatch, testtask):
         kwargs['uri'] = {'not a valid thing'}
         return None
 
-    monkeypatch.setattr('piedpiper_gman.orm.models.Artifact.create', myfunc)
+    monkeypatch.setattr('piperci_gman.orm.models.Artifact.create', myfunc)
 
     art = {'task_id': task.json['task']['task_id']}
     art.update(_artifacts[0])

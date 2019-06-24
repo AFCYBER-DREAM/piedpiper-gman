@@ -2,7 +2,7 @@
 
 from os import path
 
-from piedpiper_gman.app import run_dev
+from piperci_gman.app import run_dev
 
 
 if __name__ == '__main__':

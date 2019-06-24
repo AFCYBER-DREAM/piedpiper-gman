@@ -4,15 +4,15 @@ import re
 from flask import request
 from peewee import DoesNotExist
 
-from piedpiper_gman.orm.models import (Task,
-                                       TaskEvent,
-                                       TaskSchema,
-                                       TaskEventSchema,
-                                       QueryFailed,
-                                       ZeroResults)
+from piperci_gman.orm.models import (Task,
+                                     TaskEvent,
+                                     TaskSchema,
+                                     TaskEventSchema,
+                                     QueryFailed,
+                                     ZeroResults)
 
-from piedpiper_gman.marshaller import Marshaller, MarshalError
-from piedpiper_gman.resource import PiedPiperResource
+from piperci_gman.marshaller import Marshaller, MarshalError
+from piperci_gman.resource import PiperCiResource
 
 from werkzeug.exceptions import BadRequest
 
@@ -91,7 +91,7 @@ class GManMarshaller(Marshaller):
         return self._event
 
 
-class GMan(PiedPiperResource):
+class GMan(PiperCiResource):
 
     def head(self, thread_id=None, events=None, task_id=None):
 

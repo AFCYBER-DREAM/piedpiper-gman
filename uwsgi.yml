@@ -6,7 +6,7 @@ uwsgi:
   master: true
   vacuum: true
   http: 0.0.0.0:8080
-  module: piedpiper_gman.app:run_uwsgi
+  module: piperci_gman.app:run_uwsgi
 
   ## security ##
   # chroot: /tmp/uwsgi
