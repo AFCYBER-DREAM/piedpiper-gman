@@ -9,7 +9,7 @@
 `python setup.py test`
 
 From root
-`coverage run --source piedpiper_gman -m py.test`
+`coverage run --source piperci_gman -m py.test`
 `coverage report -m`
 OR
 `pytest tests`

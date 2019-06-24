@@ -2,10 +2,10 @@
 from attrdict import AttrDict
 import pytest
 
-from piedpiper_gman.orm.models import db_init
-from piedpiper_gman.app import app as papp
-from piedpiper_gman.gman import GMan
-from piedpiper_gman.util import Api
+from piperci_gman.orm.models import db_init
+from piperci_gman.app import app as papp
+from piperci_gman.gman import GMan
+from piperci_gman.util import Api
 
 from flask import current_app
 

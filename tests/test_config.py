@@ -1,6 +1,6 @@
 from pytest import raises
 
-from piedpiper_gman.config import load_config
+from piperci_gman.config import load_config
 
 
 def test_bad_config_path():

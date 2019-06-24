@@ -1,6 +1,6 @@
 import pytest
 
-from piedpiper_gman.app import app_setup, run_uwsgi
+from piperci_gman.app import app_setup, run_uwsgi
 
 from werkzeug.wsgi import ClosingIterator
 

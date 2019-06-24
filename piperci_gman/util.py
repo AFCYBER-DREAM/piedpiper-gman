@@ -5,7 +5,7 @@ import flask_restful
 
 import subresource_integrity as integrity
 
-from piedpiper import sri
+from piperci import sri
 
 from werkzeug.routing import (BaseConverter, ValidationError)
 

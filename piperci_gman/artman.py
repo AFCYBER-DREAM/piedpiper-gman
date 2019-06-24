@@ -1,17 +1,17 @@
 
 from flask import request
 from peewee import DoesNotExist
-from piedpiper_gman.orm.models import (Task,
-                                       TaskEvent,
-                                       Artifact,
-                                       TaskSchema,
-                                       ArtifactSchema,
-                                       QueryFailed,
-                                       ZeroResults)
+from piperci_gman.orm.models import (Task,
+                                     TaskEvent,
+                                     Artifact,
+                                     TaskSchema,
+                                     ArtifactSchema,
+                                     QueryFailed,
+                                     ZeroResults)
 
-from piedpiper_gman.gman import GMan
-from piedpiper_gman.marshaller import Marshaller, MarshalError
-from piedpiper_gman.resource import PiedPiperResource
+from piperci_gman.gman import GMan
+from piperci_gman.marshaller import Marshaller, MarshalError
+from piperci_gman.resource import PiperCiResource
 
 from werkzeug.exceptions import BadRequest
 
@@ -69,7 +69,7 @@ class ArtManMarshaller(Marshaller):
         return self._task
 
 
-class ArtMan(PiedPiperResource):
+class ArtMan(PiperCiResource):
 
     def head(self, artifact=None, task_id=None, sri=None):
         try:

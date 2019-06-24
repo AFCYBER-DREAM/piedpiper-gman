@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 
 tests_require = ['pytest-flask', 'pytest-cov']
 
-setup(name='piedpiper-gman',
+setup(name='piperci-gman',
       use_scm_version=True,
       description='A sinister inter-dimensional bureaucrat that monitors'
                   ' the state of each FaaS.',
@@ -25,7 +25,7 @@ setup(name='piedpiper-gman',
         'marshmallow==2.19.2',
         'Marshmallow-Peewee',
         'subresource-integrity',
-        'piedpiper @ git+https://github.com/AFCYBER-DREAM/python-piedpiper.git'
+        'piperci @ git+https://github.com/AFCYBER-DREAM/python-piperci.git'
         ],
       setup_requires=['setuptools-scm'],
       extras_require={'test': tests_require,

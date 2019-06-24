@@ -1,7 +1,7 @@
 from attrdict import AttrDict
 from pytest import raises, fail
 
-from piedpiper_gman.orm.models import db_init, URIField
+from piperci_gman.orm.models import db_init, URIField
 
 
 def test_bad_config_option():

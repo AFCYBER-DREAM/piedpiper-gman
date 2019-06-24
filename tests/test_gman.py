@@ -2,10 +2,10 @@ import uuid
 
 import pytest
 
-from piedpiper_gman.gman import GMan
-from piedpiper_gman.marshaller import Errors
+from piperci_gman.gman import GMan
+from piperci_gman.marshaller import Errors
 
-from piedpiper_gman.orm.models import (Task, TaskEvent, db)
+from piperci_gman.orm.models import (Task, TaskEvent, db)
 
 gman_task_event = {
     'task_id': '{}',
@@ -537,7 +537,7 @@ def test_failed_event_create_IDK(api, client, monkeypatch, testtask):
         kwargs['uri'] = {'not a valid thing'}
         return None
 
-    monkeypatch.setattr('piedpiper_gman.orm.models.TaskEvent.create', myfunc)
+    monkeypatch.setattr('piperci_gman.orm.models.TaskEvent.create', myfunc)
 
     resp = client.put(api.url_for(GMan, task_id=task.json['task']['task_id']),
                       json={'message': 'test no table',
@@ -559,7 +559,7 @@ def test_gman_post_kwargs(client, api, monkeypatch):
 
         return _post(*args, **kwargs)
 
-    monkeypatch.setattr('piedpiper_gman.gman.GMan.post', _my_post)
+    monkeypatch.setattr('piperci_gman.gman.GMan.post', _my_post)
 
     resp = client.post(api.url_for(GMan))
     assert resp.status_code == 200

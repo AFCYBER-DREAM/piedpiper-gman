@@ -4,11 +4,11 @@ import os
 from attrdict import AttrDict
 from flask import Flask
 
-from piedpiper_gman.artman import ArtMan
-from piedpiper_gman.config import load_config
-from piedpiper_gman.gman import GMan
-from piedpiper_gman.orm.models import db_init
-from piedpiper_gman.util import GManJSONEncoder, SRIConverter, Api
+from piperci_gman.artman import ArtMan
+from piperci_gman.config import load_config
+from piperci_gman.gman import GMan
+from piperci_gman.orm.models import db_init
+from piperci_gman.util import GManJSONEncoder, SRIConverter, Api
 
 
 app = Flask('gman')
