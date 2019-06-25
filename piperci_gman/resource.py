@@ -19,24 +19,29 @@ class PiperCiResource(Resource):
         message = f': {message}' if message else ''
         return ({'message': f'Internal Server Error{message}'}, 500)
 
-    def get_task_states(self, events):
+    def task_states(self, events):
         '''Parses task events to identify which state the task is in.'''
 
         running = ('started', 'received',)
         completed = ('completed',)
         failed = ('failed',)
+        pending = ('delegated',)
 
         states = {'running': [],
                   'completed': [],
                   'failed': [],
                   'pending': []}
 
+        pending_events = []
+
         for event in events:
             if event.status in running:
                 if event.task not in states['running']:
-                    states['running'].append(event.task)
+                    states['running'].append(event)
                 if event.status == 'received':
-                    states['pending'].pop()
+                    for event in pending_events:
+                        if event.task.task_id == event.task.thread_id:
+                            pending_events.remove(event)
             elif event.status in completed:
                 if event.task not in states['completed']:
                     states['completed'].append(event.task)
@@ -47,11 +52,58 @@ class PiperCiResource(Resource):
                     states['failed'].append(event.task)
                 if event.task in states['running']:
                     states['running'].remove(event.task)
-            elif event.status == 'delegated':
-                if event.task not in states['pending']:
-                    states['pending'].append(event.task)
+            elif event.status in pending:
+                if event not in pending_events:
+                    pending_events.append(event)
+
+        states['pending'] = list(set(pending_events))
 
         return states
+
+    def task(self, task_id):
+        return Task.get(Task.task_id == task_id)
+
+    def task_events(self, task_id):
+        events = [x for x in
+                  TaskEvent.select()
+                           .join(Task)
+                           .where(Task.task_id == task_id)
+                           .order_by(TaskEvent.timestamp)]
+        if len(events):
+            return events
+        else:
+            raise ZeroResults(f'No results returned for task_id: {task_id}')
+
+    def task_thread(self, thread_id):
+        return {event.task for event in self.task_event_thread(thread_id)}
+
+    def task_event_thread(self, thread_id):
+        events = [x for x in
+                  TaskEvent.select()
+                           .join(Task)
+                           .where(Task.thread_id == thread_id)
+                           .order_by(TaskEvent.timestamp)]
+        if len(events):
+            return events
+        else:
+            raise ZeroResults(f'No results returned for thread_id: {thread_id}')
+
+    def tasks_run_id(self, run_id):
+        tasks = [x for x in Task().select().where(Task.run_id == run_id)]
+        if len(tasks):
+            return tasks
+        else:
+            raise ZeroResults(f'No results returned for run_id: {run_id}')
+
+    def task_events_run_id(self, run_id):
+        events = [x for x in TaskEvent().select()
+                                        .join(Task)
+                                        .where(Task.run_id == run_id)
+                                        .order_by(TaskEvent.timestamp)]
+        if len(events):
+            return events
+        else:
+            raise ZeroResults(f'No results returned for run_id: {run_id}')
 
     def artifacts_by_task_id(self, task_id):
         arts = [x for x in Artifact.select()
@@ -81,29 +133,7 @@ class PiperCiResource(Resource):
         else:
             raise ZeroResults(f'No results returned for sri: {sri}')
 
-    def get_event_thread(self, thread_id):
-        events = [x for x in
-                  TaskEvent.select()
-                           .join(Task)
-                           .where(Task.thread_id == thread_id)
-                           .order_by(TaskEvent.timestamp)]
-        if len(events):
-            return events
-        else:
-            raise ZeroResults(f'No results returned for thread_id: {thread_id}')
-
-    def get_task_events(self, task_id):
-        events = [x for x in
-                  TaskEvent.select()
-                           .join(Task)
-                           .where(Task.task_id == task_id)
-                           .order_by(TaskEvent.timestamp)]
-        if len(events):
-            return events
-        else:
-            raise ZeroResults(f'No results returned for task_id: {task_id}')
-
-    def get_task_completed_event(self, task_id):
+    def task_completed_event(self, task_id):
         events = [x for x in
                   (TaskEvent.select()
                             .join(Task)
