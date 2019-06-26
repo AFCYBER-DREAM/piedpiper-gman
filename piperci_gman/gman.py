@@ -53,6 +53,10 @@ class GManMarshaller(Marshaller):
                         and not len(self.raw_data.get('thread_id', ''))):
                     self.errors.add('thread_id',
                                     'Thread_id is required for status received')
+                if (self.raw_data.get('status') == 'received'
+                        and not len(self.raw_data.get('parent_id', ''))):
+                    self.errors.add('parent_id',
+                                    'Parent_id is required for status received')
 
                 if (self.raw_data.get('status', '') == 'started'
                         and not len(self.raw_data.get('thread_id', ''))):
@@ -218,13 +222,18 @@ class GMan(PiperCiResource):
 
             marshaller = GManMarshaller(raw)
             marshaller.enforce('create_task')
+
             if marshaller.task.data.thread_id != marshaller.task.data.task_id:
                 Task.get(Task.task_id == marshaller.task.data.thread_id)
+
+            if marshaller.task.data.parent_id:
+                Task.get(Task.task_id == marshaller.task.data.parent_id)
 
             task = Task.create(task_id=marshaller.task.data.task_id,
                                run_id=marshaller.task.data.run_id,
                                project=marshaller.task.data.project,
                                thread_id=marshaller.task.data.thread_id,
+                               parent_id=marshaller.task.data.parent_id,
                                caller=marshaller.task.data.caller)
 
             event = TaskEvent.create(task=task,
@@ -237,8 +246,9 @@ class GMan(PiperCiResource):
         except MarshalError as e:
             return e.errors.emit(), 422
         except DoesNotExist:
-            marshaller.errors.add('thread_id',
-                                  'Thread_id must be an existing task_id')
+            marshaller.errors.add('missing_task',
+                                  'An existing task_id must exist'
+                                  ' for thread_id and parent_id')
             return marshaller.errors.emit(), 422
         except AttributeError as e:
             reg = re.compile(r" '(.+)'")

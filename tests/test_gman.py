@@ -56,7 +56,8 @@ gman_task_create_post = [
       'thread_id': 'ba279fdc-e11d-4bc8-828c-a44e35b55175',
       'message': 'thread_id must be an existing task_id'},
      422,
-     [(lambda x: 'Thread_id must be an existing task_id' in x['errors']['thread_id'],
+     [(lambda x: 'An existing task_id must exist for thread_id'
+       in str(x['errors']['missing_task']),
        'thread_id was allowed for not existing task')]),
     ({'run_id': '7',
       'project': '9435b705-fbca-49a9-a4ab-400cc932bdd1',
@@ -146,26 +147,49 @@ gman_post_delegated = [
           'message': 'test create with status == received no thread_id'},
          422,
          [(lambda x: 'Thread_id is required for status received'
-                     in x['errors']['thread_id'],
+                     in str(x['errors']['thread_id']),
                      'thread_id was not required for status received')]),
         ({'run_id': '2',
           'project': 'pytest suite',
           'caller': 'test_post_delegated_2',
           'status': 'received',
           'thread_id': '9435b705-fbca-49a9-a4ab-400cc932bdd1',
+          'parent_id': '{}',
           'message': 'test create with status == received bad thread_id'},
          422,
-         [(lambda x: 'Thread_id must be an existing task_id'
-                     in x['errors']['thread_id'],
+         [(lambda x: 'An existing task_id must exist'
+                     in str(x['errors']['missing_task']),
                      'thread_id was allowed to be created for a non-existing task')]),
         ({'run_id': '3',
           'project': 'pytest suite',
           'caller': 'test_post_delegated_3',
           'status': 'received',
           'thread_id': '{}',
+          'parent_id': '{}',
           'message': 'test create with status == received good thread_id'},
          200,
          [(lambda x: 'errors' not in x, 'errors detected on expected good post')]),
+        ({'run_id': '4',
+          'project': 'pytest suite',
+          'caller': 'test_post_delegated_4',
+          'status': 'received',
+          'thread_id': '{}',
+          'parent_id': '9435b705-fbca-49a9-a4ab-400cc932bdd1',
+          'message': 'test create with status == received bad parent_id'},
+         422,
+         [(lambda x: 'An existing task_id must exist'
+                     in str(x['errors']['missing_task']),
+                     'parent_id was allowed to be created for a non-existing task')]),
+        ({'run_id': '5',
+          'project': 'pytest suite',
+          'caller': 'test_post_delegated_4',
+          'status': 'received',
+          'thread_id': '{}',
+          'message': 'test create with status == received no parent_id'},
+         422,
+         [(lambda x: 'Parent_id is required for status received'
+                     in str(x['errors']['parent_id']),
+                     'Recieved was allowed without a parent_id')])
         ]
 
 
@@ -175,6 +199,10 @@ def test_post_delegated(data, resp_code, tests, api, client, testtask):
 
     if 'thread_id' in data and data['thread_id'] == '{}':
         data['thread_id'] = data['thread_id'].format(thread_id)
+
+    if 'parent_id' in data and data['parent_id'] == '{}':
+        data['parent_id'] = data['parent_id'].format(thread_id)
+
     resp = client.post(api.url_for(GMan), json=data)
 
     assert resp.status_code == resp_code, f'Invalid response code {resp_code}'
@@ -432,11 +460,18 @@ def testthread(api, client, testtask):
         'message': 'adding an open task',
         'status': 'received',
         'run_id': parent_task.json['task']['run_id'],
+        'parent_id': parent_task_id,
         'caller': 'pytest_next_task',
         'project': 'pytest'
     }
 
     # Delegate 3
+    resp = client.put(api.url_for(GMan, task_id=parent_task_id),
+                      json={
+                'status': f'delegated',
+                'message': f'Delegated new task {resp.json["task"]["task_id"]}'})
+    assert resp.status_code == 200, 'marking a delegated task'
+
     resp = client.put(api.url_for(GMan, task_id=parent_task_id),
                       json={
                 'status': f'delegated',
@@ -479,15 +514,37 @@ def testthread(api, client, testtask):
 
 def test_head_thread_events(api, client, testthread):
     resp = client.head(f'/thread/{testthread}')
+    assert resp.status_code == 200
     assert 'x-gman-tasks-running' in resp.headers
     assert 'x-gman-tasks-completed' in resp.headers
     assert 'x-gman-tasks-failed' in resp.headers
     assert 'x-gman-tasks-pending' in resp.headers
-    pytest.fail(str(resp.headers))
+
     assert int(resp.headers['x-gman-tasks-completed']) == 1
     assert int(resp.headers['x-gman-tasks-running']) == 1
     assert int(resp.headers['x-gman-tasks-failed']) == 1
-    assert int(resp.headers['x-gman-tasks-pending']) == 1
+    assert int(resp.headers['x-gman-tasks-pending']) == 2
+
+
+def test_head_rund_id_events(api, client, testthread):
+    resp = client.get(f'/task/{testthread}')
+    assert resp.status_code == 200
+    assert 'run_id' in resp.json
+
+    run_id = resp.json['run_id']
+
+    resp = client.head(f'/task/run_id/{run_id}')
+
+    assert resp.status_code == 200
+    assert 'x-gman-tasks-running' in resp.headers
+    assert 'x-gman-tasks-completed' in resp.headers
+    assert 'x-gman-tasks-failed' in resp.headers
+    assert 'x-gman-tasks-pending' in resp.headers
+
+    assert int(resp.headers['x-gman-tasks-completed']) == 1
+    assert int(resp.headers['x-gman-tasks-running']) == 1
+    assert int(resp.headers['x-gman-tasks-failed']) == 1
+    assert int(resp.headers['x-gman-tasks-pending']) == 2
 
 
 def test_get_thread(api, client, testthread):

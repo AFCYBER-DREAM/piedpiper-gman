@@ -30,33 +30,41 @@ class PiperCiResource(Resource):
         states = {'running': [],
                   'completed': [],
                   'failed': [],
-                  'pending': []}
+                  'pending': [],
+                  'received': []}
 
-        pending_events = []
+        pending_tasks = []
 
         for event in events:
             if event.status in running:
                 if event.task not in states['running']:
-                    states['running'].append(event)
+                    states['running'].append(event.task)
                 if event.status == 'received':
-                    for event in pending_events:
-                        if event.task.task_id == event.task.thread_id:
-                            pending_events.remove(event)
+                    states['received'].append(event.task)
+
+                    # Remove a matching parent task from pending
+                    for pending in pending_tasks:
+                        if pending.task_id == event.task.parent_id:
+                            pending_tasks.remove(pending)
+                            break
+
             elif event.status in completed:
                 if event.task not in states['completed']:
                     states['completed'].append(event.task)
                 if event.task in states['running']:
                     states['running'].remove(event.task)
+
             elif event.status in failed:
                 if event.task not in states['failed']:
                     states['failed'].append(event.task)
                 if event.task in states['running']:
                     states['running'].remove(event.task)
-            elif event.status in pending:
-                if event not in pending_events:
-                    pending_events.append(event)
 
-        states['pending'] = list(set(pending_events))
+            elif event.status in pending:
+                if event not in pending_tasks:
+                    pending_tasks.append(event.task)
+
+        states['pending'] = pending_tasks
 
         return states
 

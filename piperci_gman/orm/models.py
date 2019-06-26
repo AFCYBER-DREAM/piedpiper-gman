@@ -80,6 +80,7 @@ class Task(Model):
     run_id = TextField(null=False)
     project = TextField(null=False)
     caller = TextField(null=False)
+    parent_id = TextField(null=True)
     thread_id = TextField(null=True)
 
     class Meta:
