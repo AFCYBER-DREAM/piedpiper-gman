@@ -19,8 +19,8 @@ class PiperCiResource(Resource):
         message = f': {message}' if message else ''
         return ({'message': f'Internal Server Error{message}'}, 500)
 
-    def task_states(self, events):
-        '''Parses task events to identify which state the task is in.'''
+    def task_states(self, events):  # noqa: C901
+        """Parses task events to identify which state the task is in."""
 
         running = ('started', 'received',)
         completed = ('completed',)
@@ -33,9 +33,8 @@ class PiperCiResource(Resource):
                   'pending': [],
                   'received': []}
 
-        pending_tasks = []
-
         for event in events:
+
             if event.status in running:
                 if event.task not in states['running']:
                     states['running'].append(event.task)
@@ -43,9 +42,9 @@ class PiperCiResource(Resource):
                     states['received'].append(event.task)
 
                     # Remove a matching parent task from pending
-                    for pending in pending_tasks:
+                    for pending in states['pending']:
                         if pending.task_id == event.task.parent_id:
-                            pending_tasks.remove(pending)
+                            states['pending'].remove(pending)
                             break
 
             elif event.status in completed:
@@ -61,10 +60,8 @@ class PiperCiResource(Resource):
                     states['running'].remove(event.task)
 
             elif event.status in pending:
-                if event not in pending_tasks:
-                    pending_tasks.append(event.task)
-
-        states['pending'] = pending_tasks
+                if event not in states['pending']:
+                    states['pending'].append(event.task)
 
         return states
 
