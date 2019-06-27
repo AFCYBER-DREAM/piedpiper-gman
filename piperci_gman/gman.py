@@ -53,6 +53,10 @@ class GManMarshaller(Marshaller):
                         and not len(self.raw_data.get('thread_id', ''))):
                     self.errors.add('thread_id',
                                     'Thread_id is required for status received')
+                if (self.raw_data.get('status') == 'received'
+                        and not len(self.raw_data.get('parent_id', ''))):
+                    self.errors.add('parent_id',
+                                    'Parent_id is required for status received')
 
                 if (self.raw_data.get('status', '') == 'started'
                         and not len(self.raw_data.get('thread_id', ''))):
@@ -93,24 +97,30 @@ class GManMarshaller(Marshaller):
 
 class GMan(PiperCiResource):
 
-    def head(self, thread_id=None, events=None, task_id=None):
+    def head_event_states(self, task_events):
+        states = self.task_states(task_events)
+        headers = {'x-gman-tasks-running': len(states['running']),
+                   'x-gman-tasks-completed': len(states['completed']),
+                   'x-gman-tasks-pending': len(states['pending']),
+                   'x-gman-tasks-failed': len(states['failed'])}
+        return None, 200, headers
+
+    def head(self, thread_id=None, run_id=None, task_id=None, events=None):
 
         try:
             if thread_id:
-                task_events = self.get_event_thread(thread_id)
-
-                states = self.get_task_states(task_events)
-                headers = {'x-gman-tasks-running': len(states['running']),
-                           'x-gman-tasks-completed': len(states['completed']),
-                           'x-gman-tasks-failed': len(states['failed'])}
-                return None, 200, headers
+                task_events = self.task_event_thread(thread_id)
+                return self.head_event_states(task_events)
+            elif run_id:
+                task_events = self.task_events_run_id(run_id)
+                return self.head_event_states(task_events)
             elif task_id:
-                task_events = self.get_task_events(task_id)
+                task_events = self.task_events(task_id)
 
                 if events:
                     return None, 200, {'x-gman-events': len(task_events)}
                 else:
-                    state = [k for k, v in self.get_task_states(task_events).items()
+                    state = [k for k, v in self.task_states(task_events).items()
                              if len(v)][0]
                     return None, 200, {'x-gman-task-state': state}
             else:
@@ -124,42 +134,32 @@ class GMan(PiperCiResource):
             else:
                 headers = {'x-gman-tasks-running': 0,
                            'x-gman-tasks-completed': 0,
+                           'x-gman-tasks-pending': 0,
                            'x-gman-tasks-failed': 0}
                 return None, 404, headers
         except BadRequest:
             return None, 400
 
-    def get_thread(self, thread_id, events=None):
-        event_thread = self.get_event_thread(thread_id)
-        if events:
-            return TaskEventSchema(many=True, exclude=['id']).dump(event_thread)
-        else:
-            tasks = {event.task for event in event_thread}
-            return TaskSchema(many=True).dump(tasks)
-
-    def get_task(self, task_id=None, run_id=None, events=None):
-        if task_id:
-            task = Task.get(Task.task_id == task_id)
-        elif run_id:
-            task = Task.get(Task.run_id == run_id)
-            task_id = task.task_id
-        else:
-            return
-
-        if events:
-            events = self.get_task_events(task_id)
-            return TaskEventSchema(many=True, exclude=['id']).dump(events)
-        else:
-            return TaskSchema().dump(task)
-
     def get(self, task_id=None, run_id=None, events=None, thread_id=None):
         try:
             if thread_id:
-                return self.get_thread(thread_id, events)
+                if events:
+                    return TaskEventSchema(exclude=['id'], many=True)\
+                                .dump(self.task_event_thread(thread_id))
+                else:
+                    return TaskSchema(many=True).dump(self.task_thread(thread_id))
             elif task_id:
-                return self.get_task(task_id=task_id, events=events)
+                if events:
+                    return TaskEventSchema(exclude=['id'], many=True)\
+                                .dump(self.task_events(task_id))
+                else:
+                    return TaskSchema().dump(self.task(task_id))
             elif run_id:
-                return self.get_task(run_id=run_id, events=events)
+                if events:
+                    return TaskEventSchema(many=True) \
+                                .dump(self.task_events_run_id(run_id))
+                else:
+                    return TaskSchema(many=True).dump(self.tasks_run_id(run_id))
             else:
                 raise BadRequest('No action specified')
         except (ZeroResults, DoesNotExist):
@@ -182,7 +182,7 @@ class GMan(PiperCiResource):
             marshaller.enforce('add_event')
             task = Task.get(Task.task_id == task_id)
             try:
-                completed = self.get_task_completed_event(task_id)
+                completed = self.task_completed_event(task_id)
                 marshaller.errors.add('status',
                                       f'A closing event for {completed.task_id} of '
                                       f'{completed.status} already exists.')
@@ -196,7 +196,7 @@ class GMan(PiperCiResource):
                                      status=marshaller.event.data.status,
                                      timestamp=marshaller.event.data.timestamp)
             if event:
-                return TaskEventSchema().dump(event)
+                return TaskEventSchema(exclude=['id']).dump(event)
             else:
                 raise QueryFailed(f'Event Creation Error for task_id {task_id}')
 
@@ -222,13 +222,18 @@ class GMan(PiperCiResource):
 
             marshaller = GManMarshaller(raw)
             marshaller.enforce('create_task')
+
             if marshaller.task.data.thread_id != marshaller.task.data.task_id:
                 Task.get(Task.task_id == marshaller.task.data.thread_id)
+
+            if marshaller.task.data.parent_id:
+                Task.get(Task.task_id == marshaller.task.data.parent_id)
 
             task = Task.create(task_id=marshaller.task.data.task_id,
                                run_id=marshaller.task.data.run_id,
                                project=marshaller.task.data.project,
                                thread_id=marshaller.task.data.thread_id,
+                               parent_id=marshaller.task.data.parent_id,
                                caller=marshaller.task.data.caller)
 
             event = TaskEvent.create(task=task,
@@ -241,8 +246,9 @@ class GMan(PiperCiResource):
         except MarshalError as e:
             return e.errors.emit(), 422
         except DoesNotExist:
-            marshaller.errors.add('thread_id',
-                                  'Thread_id must be an existing task_id')
+            marshaller.errors.add('missing_task',
+                                  'An existing task_id must exist'
+                                  ' for thread_id and parent_id')
             return marshaller.errors.emit(), 422
         except AttributeError as e:
             reg = re.compile(r" '(.+)'")
