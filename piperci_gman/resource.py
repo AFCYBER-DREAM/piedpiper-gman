@@ -39,12 +39,10 @@ class PiperCiResource(Resource):
                 if event.task not in states['running']:
                     states['running'].append(event.task)
                 if event.status == 'received':
-                    states['received'].append(event.task)
-
                     # Remove a matching parent task from pending
-                    for pending in states['pending']:
-                        if pending.task_id == event.task.parent_id:
-                            states['pending'].remove(pending)
+                    for pending_task in states['pending']:
+                        if pending_task.task_id == event.task.parent_id:
+                            states['pending'].remove(pending_task)
                             break
 
             elif event.status in completed:
