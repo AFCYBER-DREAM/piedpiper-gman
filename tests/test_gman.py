@@ -526,14 +526,14 @@ def test_head_thread_events(api, client, testthread):
     assert int(resp.headers['x-gman-tasks-pending']) == 2
 
 
-def test_head_rund_id_events(api, client, testthread):
+def test_head_run_id_events(api, client, testthread):
     resp = client.get(f'/task/{testthread}')
     assert resp.status_code == 200
     assert 'run_id' in resp.json
 
     run_id = resp.json['run_id']
 
-    resp = client.head(f'/task/run_id/{run_id}')
+    resp = client.head(f'/run/{run_id}')
 
     assert resp.status_code == 200
     assert 'x-gman-tasks-running' in resp.headers
